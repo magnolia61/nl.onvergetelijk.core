@@ -461,9 +461,6 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
         $ditevent_criteria_indicatie        = $array_partditevent['part_criteria_indicatie']    ?? NULL;
         $ditevent_criteria_oordeel          = $array_partditevent['part_criteria_oordeel']      ?? NULL;
 
-        $new_ditevent_criteria_indicatie    = $ditevent_criteria_indicatie;
-        $new_ditevent_criteria_oordeel      = $ditevent_criteria_oordeel; 
-
         $ditevent_part_notificatie_deel     = $array_partditevent['part_notificatie_deel']      ?? NULL;
         $ditevent_part_notificatie_leid     = $array_partditevent['part_notificatie_leid']      ?? NULL;
         $ditevent_part_notificatie_kamp     = $array_partditevent['part_notificatie_kamp']      ?? NULL;
@@ -643,6 +640,7 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
         }
     }
 
+}
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 1.3 GET CONTACT INFO BASED ON CONTACTID",        "[CID: $contact_id]");
     wachthond($extdebug,3, "########################################################################");
@@ -1303,404 +1301,241 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
 
     watchdog('civicrm_timing', core_microtimer("EINDE 1.X get variables"), NULL, WATCHDOG_DEBUG);
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,2, "### CORE 2.X CHECK CRITERIA & STATUS DIT JAAR EN DIT EVENT");
-    wachthond($extdebug,3, "########################################################################");
+    wachthond($extdebug, 2, "########################################################################");
+    wachthond($extdebug, 1, "### CORE 2.X CHECK CRITERIA & STATUS DIT JAAR EN DIT EVENT");
+    wachthond($extdebug, 2, "########################################################################");
 
     watchdog('civicrm_timing', core_microtimer("START 2.X bepaal basisinfo"), NULL, WATCHDOG_DEBUG);
 
     if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
 
-        ###########################################################################################
-        ### BEPAAL LAST & NEXT EVENT DATES");
-        ###########################################################################################
+        // ==============================================================================================
+        // BEPAAL LAST & NEXT EVENT DATES
+        // ==============================================================================================
+        $today_nextkamp_lastnext        = find_lastnext($today_datetime); 
+        $today_nextkamp_start_date      = $today_nextkamp_lastnext['next_start_date'] ?? NULL;
 
-        $today_nextkamp_lastnext  = find_lastnext($today_datetime); 
-        wachthond($extdebug,3, 'today_nextkamp_lastnext',               $today_nextkamp_lastnext);
+        wachthond($extdebug, 3, 'today_nextkamp_lastnext',                  $today_nextkamp_lastnext);
+        wachthond($extdebug, 3, 'today_nextkamp_start_date',                $today_nextkamp_start_date);
 
-        $today_nextkamp_start_date  =   $today_nextkamp_lastnext['next_start_date'];
-        wachthond($extdebug,3, 'today_nextkamp_start_date',             $today_nextkamp_start_date);
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE 2.1 RETRIEVE CURRENT AGE AND AGE AT EVENT", $displayname);
+        wachthond($extdebug, 2, "########################################################################");
 
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 2.1 RETRIEVE CURRENT AGE AND AGE AT EVENT",     "$displayname");
-        wachthond($extdebug,2, "########################################################################");
-
-        $leeftijd_vantoday_decimalen = NULL;
-        $leeftijd_vantoday_rondjaren = NULL;
+        $leeftijd_vantoday_decimalen    = NULL;
+        $leeftijd_vantoday_rondjaren    = NULL;
 
         if ($birth_date AND $today_datetime) {
+            $leeftijd_vantoday              = leeftijd_civicrm_diff('vandaag', $birth_date, $today_datetime);
+            $leeftijd_vantoday_decimalen    = $leeftijd_vantoday['leeftijd_decimalen'] ?? NULL;
+            $leeftijd_vantoday_rondjaren    = $leeftijd_vantoday['leeftijd_rondjaren'] ?? NULL;
 
-            $leeftijd_vantoday = leeftijd_civicrm_diff('vandaag', $birth_date, $today_datetime);
-            wachthond($extdebug,3, 'leeftijd_vantoday',       $leeftijd_vantoday);
-            $leeftijd_vantoday_decimalen  = $leeftijd_vantoday['leeftijd_decimalen'] ?? NULL;
-            $leeftijd_vantoday_rondjaren  = $leeftijd_vantoday['leeftijd_rondjaren'] ?? NULL;
-            wachthond($extdebug,4, 'leeftijd_vantoday_decimalen', $leeftijd_vantoday_decimalen);
+            wachthond($extdebug, 3, 'leeftijd_vantoday',                    $leeftijd_vantoday);
+            wachthond($extdebug, 4, 'leeftijd_vantoday_decimalen',          $leeftijd_vantoday_decimalen);
         }
 
-        $leeftijd_ditevent_decimalen = NULL;
-        $leeftijd_ditevent_rondjaren = NULL;
+        $leeftijd_ditevent_decimalen    = NULL;
+        $leeftijd_ditevent_rondjaren    = NULL;
 
         if ($birth_date AND $ditevent_event_start) {
+            $leeftijd_ditevent              = leeftijd_civicrm_diff('ditevent', $birth_date, $ditevent_event_start);
+            $leeftijd_ditevent_decimalen    = $leeftijd_ditevent['leeftijd_decimalen'] ?? NULL;
+            $leeftijd_ditevent_rondjaren    = $leeftijd_ditevent['leeftijd_rondjaren'] ?? NULL;
 
-            $leeftijd_ditevent = leeftijd_civicrm_diff('ditevent',  $birth_date, $ditevent_event_start);
-            wachthond($extdebug,3, 'leeftijd_ditevent',       $leeftijd_ditevent);
-            $leeftijd_ditevent_decimalen  = $leeftijd_ditevent['leeftijd_decimalen'] ?? NULL;
-            $leeftijd_ditevent_rondjaren  = $leeftijd_ditevent['leeftijd_rondjaren'] ?? NULL;
-            wachthond($extdebug,4, 'leeftijd_ditevent_decimalen',   $leeftijd_ditevent_decimalen);
+            wachthond($extdebug, 3, 'leeftijd_ditevent',                    $leeftijd_ditevent);
+            wachthond($extdebug, 4, 'leeftijd_ditevent_decimalen',          $leeftijd_ditevent_decimalen);
         }
 
-        $leeftijd_nextkamp_decimalen = NULL;
-        $leeftijd_nextkamp_rondjaren = NULL;
-        $leeftijd_nextkamp_rondmaand = NULL;
+        $leeftijd_nextkamp_decimalen    = NULL;
+        $leeftijd_nextkamp_rondjaren    = NULL;
+        $leeftijd_nextkamp_rondmaand    = NULL;
 
         if ($birth_date AND $today_nextkamp_start_date) {
+            $leeftijd_nextkamp              = leeftijd_civicrm_diff('nextkamp', $birth_date, $today_nextkamp_start_date);
+            $leeftijd_nextkamp_decimalen    = $leeftijd_nextkamp['leeftijd_decimalen'] ?? NULL;
+            $leeftijd_nextkamp_rondjaren    = $leeftijd_nextkamp['leeftijd_rondjaren'] ?? NULL;
+            $leeftijd_nextkamp_rondmaand    = $leeftijd_nextkamp['leeftijd_rondmaand'] ?? NULL;
 
-            $leeftijd_nextkamp = leeftijd_civicrm_diff('nextkamp',  $birth_date, $today_nextkamp_start_date);
-            wachthond($extdebug,3, 'leeftijd_nextkamp',       $leeftijd_nextkamp);
-            $leeftijd_nextkamp_decimalen = $leeftijd_nextkamp['leeftijd_decimalen'] ?? NULL;
-            $leeftijd_nextkamp_rondjaren = $leeftijd_nextkamp['leeftijd_rondjaren'] ?? NULL;
-            $leeftijd_nextkamp_rondmaand = $leeftijd_nextkamp['leeftijd_rondmaand'] ?? NULL;
-            wachthond($extdebug,4, 'leeftijd_nextkamp_decimalen',   $leeftijd_nextkamp_decimalen);
-            wachthond($extdebug,4, 'leeftijd_nextkamp_rondjaren',   $leeftijd_nextkamp_rondjaren);
-            wachthond($extdebug,4, 'leeftijd_nextkamp_rondmaand',   $leeftijd_nextkamp_rondmaand);
+            wachthond($extdebug, 3, 'leeftijd_nextkamp',                    $leeftijd_nextkamp);
+            wachthond($extdebug, 4, 'leeftijd_nextkamp_decimalen',          $leeftijd_nextkamp_decimalen);
+            wachthond($extdebug, 4, 'leeftijd_nextkamp_rondjaren',          $leeftijd_nextkamp_rondjaren);
+            wachthond($extdebug, 4, 'leeftijd_nextkamp_rondmaand',          $leeftijd_nextkamp_rondmaand);
         }
     }
 
-    if (in_array($groupID, $profilepartdeel)) { // PROFILE PART DEEL)
+    if (in_array($groupID, $profilepartdeel)) { 
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE 2.2 BEOORDEEL LEEFTIJDSCRITERIA DIT EVENT",         $displayname);
+        wachthond($extdebug, 2, "########################################################################");
 
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 2.2 BEOORDEEL LEEFTIJDSCRITERIA DIT EVENT",         $displayname);
-        wachthond($extdebug,2, "########################################################################");
-
-        $array_criteria_ditevent = leeftijd_civicrm_criteria($array_partditevent, $leeftijd_ditevent_decimalen);
-
-        wachthond($extdebug,4, "########################################################################");   
-        wachthond($extdebug,1, "RECEIVE leeftijd_criteria_ditevent",             $array_criteria_ditevent);
-        wachthond($extdebug,2, "########################################################################");   
-
-        $new_ditevent_criteria_leeftijd   = $array_criteria_ditevent['criteria_leeftijd']    ?? NULL;
-        $new_ditevent_criteria_school     = $array_criteria_ditevent['criteria_school']      ?? NULL;
-        $new_ditevent_criteria_indicatie  = $array_criteria_ditevent['criteria_indicatie']   ?? NULL;
-        $new_ditevent_criteria_oordeel    = $array_criteria_ditevent['criteria_oordeel']     ?? NULL;
-
-        wachthond($extdebug,3, "INDICATIE/OORDEEL CRITERIA OBV $ditevent_event_kampkort $ditevent_kampjaar","NU");
-
-        wachthond($extdebug,4, 'ditevent_leeftijd_decimalen',         $leeftijd_ditevent_decimalen);
-        wachthond($extdebug,4, 'ditevent_part_groepklas',             $ditevent_part_groepklas);
-        wachthond($extdebug,3, 'org_ditevent_criteria_indicatie',     $ditevent_criteria_indicatie);
-        wachthond($extdebug,3, 'org_ditevent_criteria_oordeel',       $ditevent_criteria_oordeel);
-
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,3, "INDICATIE/OORDEEL CRITERIA OBV $ditevent_event_kampkort $ditevent_kampjaar","NEW");
-
-        wachthond($extdebug,4, 'new_ditevent_criteria_leeftijd',      $new_ditevent_criteria_leeftijd);
-        wachthond($extdebug,4, 'new_ditevent_criteria_school',        $new_ditevent_criteria_school);
-        wachthond($extdebug,2, 'new_ditevent_criteria_indicatie',     $new_ditevent_criteria_indicatie);
-        wachthond($extdebug,2, 'new_ditevent_criteria_oordeel',       $new_ditevent_criteria_oordeel);
+        $array_criteria_ditevent        = leeftijd_civicrm_criteria($array_partditevent, $leeftijd_ditevent_decimalen);
+        
+        wachthond($extdebug, 3, "RETURN array_criteria_ditevent",                           $array_criteria_ditevent);
     }
 
-    if (in_array($groupID, $profilepart)) { // PROFILE PART)
+    if (in_array($groupID, $profilepart)) { 
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE 2.3 PAS PART STATUS AAN OBV CRITERIA",              $displayname);
+        wachthond($extdebug, 2, "########################################################################");
 
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 2.3 PAS PART STATUS AAN OBV CRITERIA",            "$displayname");
-        wachthond($extdebug,2, "########################################################################");
+        $array_status_ditevent          = leeftijd_civicrm_status($array_partditevent, $array_criteria_ditevent ?? []);
 
-        $array_status_ditevent = leeftijd_civicrm_status($array_partditevent, $array_criteria_ditevent);
-
-        if ($ditevent_part_rol == 'deelnemer') {
-            $new_ditevent_criteriacheck_start = $array_status_ditevent['criteriacheck_start'];
-            $new_ditevent_criteriacheck_einde = $array_status_ditevent['criteriacheck_einde'];
-            $new_ditevent_wachtlijst_erop     = $array_status_ditevent['wachtlijst_erop'];
-            $new_ditevent_wachtlijst_eraf     = $array_status_ditevent['wachtlijst_eraf'];  
-        }
-
-        $new_ditevent_part_status_id          = $array_status_ditevent['ditevent_part_status_id'];
-        $new_ditevent_part_status_name        = $array_status_ditevent['ditevent_part_status_name'];
-        $new_ditevent_deelnamestatus          = $array_status_ditevent['ditevent_deelnamestatus'];
-
-        wachthond($extdebug,4, "########################################################################");   
-        wachthond($extdebug,3, "RECEIVE leeftijd_status_ditevent",                 $array_status_ditevent);
-        wachthond($extdebug,2, "########################################################################");
-
-        if ($ditevent_part_rol == 'deelnemer') {
-            wachthond($extdebug,3, 'new_ditevent_criteriacheck_start',  $new_ditevent_criteriacheck_start);
-            wachthond($extdebug,3, 'new_ditevent_criteriacheck_einde',  $new_ditevent_criteriacheck_einde);
-            wachthond($extdebug,3, 'new_ditevent_wachtlijst_erop',      $new_ditevent_wachtlijst_erop);
-            wachthond($extdebug,3, 'new_ditevent_wachtlijst_eraf',      $new_ditevent_wachtlijst_eraf);
-        }
-
-        wachthond($extdebug,3, 'new_ditevent_part_status_id',           $new_ditevent_part_status_id);
-        wachthond($extdebug,3, 'new_ditevent_part_status_name',         $new_ditevent_part_status_name);
-        wachthond($extdebug,3, 'new_ditevent_deelnamestatus',           $new_ditevent_deelnamestatus);
+        wachthond($extdebug, 3, "RETURN array_status_ditevent",                             $array_status_ditevent);
     }
 
     if ($ditjaar_prim_partid == $ditevent_part_id) {
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE 2.4 PRIMEVENT == DITEVENT > HERBRUIK CRITERIA DITEVENT");
+        wachthond($extdebug, 2, "########################################################################");
 
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 2.4 INDIEN PRIMEVENT == DITEVENT > HERBRUIK CRITERIA DITEVENT");
-        wachthond($extdebug,2, "########################################################################");
+        $array_criteria_ditjaar         = $array_criteria_ditevent ?? [];
+        $array_status_ditjaar           = $array_status_ditevent   ?? [];
 
-        $array_criteria_ditjaar                 = $array_criteria_ditevent;
-        $array_status_ditjaar                   = $array_status_ditevent;
-
-        if ($ditjaar_part_rol == 'deelnemer') {
-            $new_ditjaar_criteria_leeftijd      = $new_ditevent_criteria_leeftijd;
-            $new_ditjaar_criteria_school        = $new_ditevent_criteria_school;
-            $new_ditjaar_criteria_indicatie     = $new_ditevent_criteria_indicatie;
-            $new_ditjaar_criteria_oordeel       = $new_ditevent_criteria_oordeel;
-
-            $new_ditjaar_criteriacheck_start    = $new_ditevent_criteriacheck_start;
-            $new_ditjaar_criteriacheck_einde    = $new_ditevent_criteriacheck_einde;
-            $new_ditjaar_wachtlijst_erop        = $new_ditevent_wachtlijst_erop;
-            $new_ditjaar_wachtlijst_eraf        = $new_ditevent_wachtlijst_eraf;
-        }
-
-        $new_ditjaar_part_status_id             = $new_ditevent_part_status_id;
-        $new_ditjaar_part_status_name           = $new_ditevent_part_status_name;
-        $new_ditjaar_deelnamestatus             = $new_ditevent_deelnamestatus;
-
-        if ($ditjaar_part_rol == 'deelnemer') {
-
-            wachthond($extdebug,2, 'new_ditjaar_criteria_leeftijd',     $new_ditjaar_criteria_leeftijd);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_school',       $new_ditjaar_criteria_school);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_indicatie',    $new_ditjaar_criteria_indicatie);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_oordeel',      $new_ditjaar_criteria_oordeel);
-
-            wachthond($extdebug,3, 'new_ditjaar_criteriacheck_start',   $new_ditjaar_criteriacheck_start);
-            wachthond($extdebug,3, 'new_ditjaar_criteriacheck_einde',   $new_ditjaar_criteriacheck_einde);
-            wachthond($extdebug,3, 'new_ditjaar_wachtlijst_erop',       $new_ditjaar_wachtlijst_erop);
-            wachthond($extdebug,3, 'new_ditjaar_wachtlijst_eraf',       $new_ditjaar_wachtlijst_eraf);
-        }
-
-            wachthond($extdebug,3, 'new_ditjaar_part_status_id',        $new_ditjaar_part_status_id);
-            wachthond($extdebug,3, 'new_ditjaar_part_status_name',      $new_ditjaar_part_status_name);
-            wachthond($extdebug,3, 'new_ditjaar_deelnamestatus',        $new_ditjaar_deelnamestatus);        
+        wachthond($extdebug, 3, "RETURN array_criteria_ditjaar (HERGEBRUIK)",               $array_criteria_ditjaar);
+        wachthond($extdebug, 3, "RETURN array_status_ditjaar (HERGEBRUIK)",                 $array_status_ditjaar);
 
     } else {
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE 2.5/2.6 BEREKEN EN PAS PART STATUS (PRIM) AAN OBV CRITERIA", $displayname);
+        wachthond($extdebug, 2, "########################################################################");
 
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 2.5 BEOORDEEL LEEFTIJDSCRITERIA (PRIM DITJAAR)",    $displayname);
-        wachthond($extdebug,2, "########################################################################");
-
-        $leeftijd_ditjaar           = leeftijd_civicrm_diff('ditevent', $birth_date, $ditjaar_event_start);
-        wachthond($extdebug,3, 'RECEIVE leeftijd_ditjaar',             $leeftijd_ditjaar);
-
-        $leeftijd_ditjaar_decimalen  = $leeftijd_ditjaar['leeftijd_decimalen'] ?? NULL;
-        $leeftijd_ditjaar_rondjaren  = $leeftijd_ditjaar['leeftijd_rondjaren'] ?? NULL;
-        wachthond($extdebug,2, 'leeftijd_ditjaar_decimalen',           $leeftijd_ditjaar_decimalen);
+        $leeftijd_ditjaar               = leeftijd_civicrm_diff('ditjaar', $birth_date, $ditjaar_event_start);
+        $leeftijd_ditjaar_decimalen     = $leeftijd_ditjaar['leeftijd_decimalen'] ?? NULL;
 
         if ($ditjaar_part_rol == 'deelnemer') {
-
-            wachthond($extdebug,4, 'array_partditjaar',                 $array_partditjaar);
-
             watchdog('civicrm_timing', core_microtimer("START leeftijd_criteria"), NULL, WATCHDOG_DEBUG);
-            $array_criteria_ditjaar = leeftijd_civicrm_criteria($array_partditjaar, $leeftijd_ditjaar_decimalen);
+            $array_criteria_ditjaar     = leeftijd_civicrm_criteria($array_partditjaar, $leeftijd_ditjaar_decimalen);
             watchdog('civicrm_timing', core_microtimer("EINDE leeftijd_criteria"), NULL, WATCHDOG_DEBUG);
-
-            wachthond($extdebug,2, "########################################################################");   
-            wachthond($extdebug,1, "RECEIVE leeftijd_criteria_ditjaar",               $array_criteria_ditjaar);
-            wachthond($extdebug,2, "########################################################################");   
-
-            $new_ditjaar_criteria_leeftijd  = $array_criteria_ditjaar['criteria_leeftijd']      ?? NULL;
-            $new_ditjaar_criteria_school    = $array_criteria_ditjaar['criteria_school']        ?? NULL;
-            $new_ditjaar_criteria_indicatie = $array_criteria_ditjaar['criteria_indicatie']     ?? NULL;
-            $new_ditjaar_criteria_oordeel   = $array_criteria_ditjaar['criteria_oordeel']       ?? NULL;
-
-            wachthond($extdebug,3, "INDICATIE CRITERIA OBV $ditjaar_event_kampkort $ditjaar_event_kampjaar");
-            wachthond($extdebug,3, 'leeftijd_ditjaar_decimalen',        $leeftijd_ditjaar_decimalen);
-            wachthond($extdebug,3, 'ditjaar_part_groepklas',            $ditjaar_part_groepklas);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_leeftijd',     $new_ditjaar_criteria_leeftijd);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_school',       $new_ditjaar_criteria_school);
-            wachthond($extdebug,3, 'org_ditjaar_criteria_indicatie',    $ditjaar_criteria_indicatie);
-            wachthond($extdebug,3, 'org_ditjaar_criteria_oordeel',      $ditjaar_criteria_oordeel);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_indicatie',    $new_ditjaar_criteria_indicatie);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_oordeel',      $new_ditjaar_criteria_oordeel);
+            
+            wachthond($extdebug, 3, "RETURN array_criteria_ditjaar",                        $array_criteria_ditjaar);
         }
-
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 2.6 PAS PART STATUS (PRIM) AAN OBV CRITERIA",       $displayname);
-        wachthond($extdebug,2, "########################################################################");
 
         watchdog('civicrm_timing', core_microtimer("START leeftijd_status"), NULL, WATCHDOG_DEBUG);
-        $array_status_ditjaar = leeftijd_civicrm_status($array_partditjaar, $array_criteria_ditjaar);
+        $array_status_ditjaar           = leeftijd_civicrm_status($array_partditjaar, $array_criteria_ditjaar ?? []);
         watchdog('civicrm_timing', core_microtimer("EINDE leeftijd_status"), NULL, WATCHDOG_DEBUG);
 
-        if ($ditjaar_part_rol == 'deelnemer') {
-            $new_ditjaar_criteriacheck_start = $array_status_ditjaar['criteriacheck_start'];
-            $new_ditjaar_criteriacheck_einde = $array_status_ditjaar['criteriacheck_einde'];
-            $new_ditjaar_wachtlijst_erop     = $array_status_ditjaar['wachtlijst_erop'];
-            $new_ditjaar_wachtlijst_eraf     = $array_status_ditjaar['wachtlijst_eraf'];
-        }
-            $new_ditjaar_part_status_id      = $array_status_ditjaar['ditevent_part_status_id'];
-            $new_ditjaar_part_status_name    = $array_status_ditjaar['ditevent_part_status_name'];
-            $new_ditjaar_deelnamestatus      = $array_status_ditjaar['ditevent_deelnamestatus'];
-
-        wachthond($extdebug,2, "########################################################################");   
-        wachthond($extdebug,3, "RECEIVE leeftijd_status_ditjaar",                   $array_status_ditjaar);
-        wachthond($extdebug,2, "########################################################################");
-
-        if ($ditjaar_part_rol == 'deelnemer') {
-
-            wachthond($extdebug,3, 'new_ditjaar_criteriacheck_start',   $new_ditjaar_criteriacheck_start);
-            wachthond($extdebug,3, 'new_ditjaar_criteriacheck_einde',   $new_ditjaar_criteriacheck_einde);
-            wachthond($extdebug,3, 'new_ditjaar_wachtlijst_erop',       $new_ditjaar_wachtlijst_erop);
-            wachthond($extdebug,3, 'new_ditjaar_wachtlijst_eraf',       $new_ditjaar_wachtlijst_eraf);
-        }
-
-            wachthond($extdebug,3, 'new_ditjaar_part_status_id',        $new_ditjaar_part_status_id);
-            wachthond($extdebug,3, 'new_ditjaar_part_status_name',      $new_ditjaar_part_status_name);
-            wachthond($extdebug,3, 'new_ditjaar_deelnamestatus',        $new_ditjaar_deelnamestatus);
-
-        if ($ditjaar_part_rol == 'deelnemer') {
-
-            wachthond($extdebug,2, 'new_ditjaar_criteria_leeftijd',     $new_ditjaar_criteria_leeftijd);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_school',       $new_ditjaar_criteria_school);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_indicatie',    $new_ditjaar_criteria_indicatie);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_oordeel',      $new_ditjaar_criteria_oordeel);
-
-            wachthond($extdebug,3, 'new_ditevent_criteria_indicatie',   $new_ditevent_criteria_indicatie);
-            wachthond($extdebug,3, 'new_ditevent_criteria_oordeel',     $new_ditevent_criteria_oordeel);
-            wachthond($extdebug,3, 'new_ditjaar_criteria_indicatie',    $new_ditjaar_criteria_indicatie);
-            wachthond($extdebug,3, 'new_ditjaar_criteria_oordeel',      $new_ditjaar_criteria_oordeel);
-        }
+        wachthond($extdebug, 3, "RETURN array_status_ditjaar",                              $array_status_ditjaar);
     }
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,2, "### CORE 2.7 BEPAAL DE DEELNAMESTATUS DIT JAAR EN DIT EVENT");
-    wachthond($extdebug,3, "########################################################################");
+    wachthond($extdebug, 2, "########################################################################");
+    wachthond($extdebug, 1, "### CORE 2.7 BEPAAL DE DEELNAMESTATUS DIT JAAR EN DIT EVENT");
+    wachthond($extdebug, 2, "########################################################################");
 
-    wachthond($extdebug,3, "array_partditevent",      $array_partditevent);
-    wachthond($extdebug,3, "array_allpart_eventjaar", $array_allpart_eventjaar);
-    wachthond($extdebug,3, "array_status_ditevent",   $array_status_ditevent);
+    wachthond($extdebug, 3, "array_partditevent",               $array_partditevent);
+    wachthond($extdebug, 3, "array_allpart_eventjaar",          $array_allpart_eventjaar);
+    wachthond($extdebug, 3, "array_status_ditevent",            $array_status_ditevent ?? []);
 
-    wachthond($extdebug,1, core_microtimer("Start raadplegen mee_configure ditevent"));
-    // 1. BEREKEN STATUS VOOR HET EVENT
-    $ditevent_array = mee_civicrm_configure($contact_id,                $array_partditevent,
-                                            $array_allpart_eventjaar,   $array_status_ditevent, $array_criteria_ditevent);  // jaar event
-    wachthond($extdebug,1, core_microtimer("Einde raadplegen mee_configure ditevent"));
-
-    wachthond($extdebug,4, "########################################################################");    
-    wachthond($extdebug,1, "A RECEIVE ditevent_array",                        $ditevent_array);
-    wachthond($extdebug,2, "########################################################################");    
-
-    // Hier pakken we de 'ditevent' sleutels
-    $diteventdeelyes        = $ditevent_array['diteventdeelyes'];
-    $diteventdeelnot        = $ditevent_array['diteventdeelnot'];
-    $diteventdeelmss        = $ditevent_array['diteventdeelmss'];
-    $diteventdeelstf        = $ditevent_array['diteventdeelstf'];
-    $diteventdeeltst        = $ditevent_array['diteventdeeltst'];
-    $diteventdeeltxt        = $ditevent_array['diteventdeeltxt'];
-
-    $diteventleidyes        = $ditevent_array['diteventleidyes'];
-    $diteventleidnot        = $ditevent_array['diteventleidnot'];
-    $diteventleidmss        = $ditevent_array['diteventleidmss'];
-    $diteventleidstf        = $ditevent_array['diteventleidstf'];
-    $diteventleidtst        = $ditevent_array['diteventleidtst'];
-    $diteventleidtxt        = $ditevent_array['diteventleidtxt'];
-
-    wachthond($extdebug,1, 'array_partditjaar',         $array_partditjaar);
-    wachthond($extdebug,1, 'array_allpart_ditjaar',     $array_allpart_ditjaar);
-    wachthond($extdebug,1, 'array_status_ditjaar',      $array_status_ditjaar);
-    wachthond($extdebug,1, 'array_criteria_ditjaar',    $array_criteria_ditjaar);
-
-    wachthond($extdebug,1, core_microtimer("Start raadplegen mee_configure ditjaar"));
-    // 2. BEREKEN STATUS VOOR HET HUIDIGE JAAR (Los van het event)
-    $ditjaar_array = mee_civicrm_configure($contact_id,             $array_allpart_ditjaar, 
-                                           $array_partditjaar,      $array_status_ditjaar,  $array_criteria_ditjaar);  // huidig jaar
-    wachthond($extdebug,1, core_microtimer("Einde raadplegen mee_configure ditjaar"));
-
-    wachthond($extdebug,4, "########################################################################");    
-    wachthond($extdebug,1, "B RECEIVE ditjaar_array",                                  $ditjaar_array);
-    wachthond($extdebug,2, "########################################################################");    
-
-    // AANPASSING: We lezen nu de 'ditjaar' sleutels uit de array.
-    // Omdat de mee-module nu een merged array teruggeeft, bevat $ditjaar_array ook de correcte 'ditjaar...' keys.
+    wachthond($extdebug, 1, core_microtimer("Start raadplegen mee_configure ditevent"));
     
-    $ditjaardeelyes         = $ditjaar_array['ditjaardeelyes'];
-    $ditjaardeelnot         = $ditjaar_array['ditjaardeelnot'];
-    $ditjaardeelmss         = $ditjaar_array['ditjaardeelmss'];
-    $ditjaardeelstf         = $ditjaar_array['ditjaardeelstf'];
-    $ditjaardeeltst         = $ditjaar_array['ditjaardeeltst'];
-    $ditjaardeeltxt         = $ditjaar_array['ditjaardeeltxt'];
+    // 1. BEREKEN STATUS VOOR HET EVENT
+    $ditevent_array = mee_civicrm_configure(
+        $contact_id, 
+        $array_partditevent, 
+        $array_allpart_eventjaar, 
+        $array_status_ditevent ?? [], 
+        $array_criteria_ditevent ?? []
+    ); 
+    
+    wachthond($extdebug, 1, core_microtimer("Einde raadplegen mee_configure ditevent"));
 
-    $ditjaarleidyes         = $ditjaar_array['ditjaarleidyes'];
-    $ditjaarleidnot         = $ditjaar_array['ditjaarleidnot'];
-    $ditjaarleidmss         = $ditjaar_array['ditjaarleidmss'];
-    $ditjaarleidstf         = $ditjaar_array['ditjaarleidstf'];
-    $ditjaarleidtst         = $ditjaar_array['ditjaarleidtst'];
-    $ditjaarleidtxt         = $ditjaar_array['ditjaarleidtxt'];
+    wachthond($extdebug, 2, "########################################################################");    
+    wachthond($extdebug, 1, "A RECEIVE ditevent_array",                                 $ditevent_array);
+    wachthond($extdebug, 2, "########################################################################");    
+
+    // Hier pakken we de 'ditevent' sleutels met default NULL
+    $diteventdeelyes                = $ditevent_array['diteventdeelyes']                ?? NULL;
+    $diteventdeelnot                = $ditevent_array['diteventdeelnot']                ?? NULL;
+    $diteventdeelmss                = $ditevent_array['diteventdeelmss']                ?? NULL;
+    $diteventdeelstf                = $ditevent_array['diteventdeelstf']                ?? NULL;
+    $diteventdeeltst                = $ditevent_array['diteventdeeltst']                ?? NULL;
+    $diteventdeeltxt                = $ditevent_array['diteventdeeltxt']                ?? NULL;
+
+    $diteventleidyes                = $ditevent_array['diteventleidyes']                ?? NULL;
+    $diteventleidnot                = $ditevent_array['diteventleidnot']                ?? NULL;
+    $diteventleidmss                = $ditevent_array['diteventleidmss']                ?? NULL;
+    $diteventleidstf                = $ditevent_array['diteventleidstf']                ?? NULL;
+    $diteventleidtst                = $ditevent_array['diteventleidtst']                ?? NULL;
+    $diteventleidtxt                = $ditevent_array['diteventleidtxt']                ?? NULL;
+
+    wachthond($extdebug, 3, 'array_partditjaar',                $array_partditjaar);
+    wachthond($extdebug, 3, 'array_allpart_ditjaar',            $array_allpart_ditjaar);
+    wachthond($extdebug, 3, 'array_status_ditjaar',             $array_status_ditjaar   ?? []);
+    wachthond($extdebug, 3, 'array_criteria_ditjaar',           $array_criteria_ditjaar ?? []);
+
+    wachthond($extdebug, 1, core_microtimer("Start raadplegen mee_configure ditjaar"));
+    
+    // 2. BEREKEN STATUS VOOR HET HUIDIGE JAAR (Los van het event)
+    // LET OP DE PARAMETER VOLGORDE FIX: Eerst part, dan allpart
+    $ditjaar_array = mee_civicrm_configure(
+        $contact_id, 
+        $array_partditjaar, 
+        $array_allpart_ditjaar, 
+        $array_status_ditjaar   ?? [], 
+        $array_criteria_ditjaar ?? []
+    ); 
+    
+    wachthond($extdebug, 1, core_microtimer("Einde raadplegen mee_configure ditjaar"));
+
+    wachthond($extdebug, 2, "########################################################################");    
+    wachthond($extdebug, 1, "B RECEIVE ditjaar_array",                                  $ditjaar_array);
+    wachthond($extdebug, 2, "########################################################################");    
+    
+    $ditjaardeelyes                 = $ditjaar_array['ditjaardeelyes']                  ?? NULL;
+    $ditjaardeelnot                 = $ditjaar_array['ditjaardeelnot']                  ?? NULL;
+    $ditjaardeelmss                 = $ditjaar_array['ditjaardeelmss']                  ?? NULL;
+    $ditjaardeelstf                 = $ditjaar_array['ditjaardeelstf']                  ?? NULL;
+    $ditjaardeeltst                 = $ditjaar_array['ditjaardeeltst']                  ?? NULL;
+    $ditjaardeeltxt                 = $ditjaar_array['ditjaardeeltxt']                  ?? NULL;
+
+    $ditjaarleidyes                 = $ditjaar_array['ditjaarleidyes']                  ?? NULL;
+    $ditjaarleidnot                 = $ditjaar_array['ditjaarleidnot']                  ?? NULL;
+    $ditjaarleidmss                 = $ditjaar_array['ditjaarleidmss']                  ?? NULL;
+    $ditjaarleidstf                 = $ditjaar_array['ditjaarleidstf']                  ?? NULL;
+    $ditjaarleidtst                 = $ditjaar_array['ditjaarleidtst']                  ?? NULL;
+    $ditjaarleidtxt                 = $ditjaar_array['ditjaarleidtxt']                  ?? NULL;
 
     // Fallback: Als er helemaal geen data is voor het jaar (count == 0), forceer naar NOT.
-    // (Dit vangt situaties af waar de mee-module misschien lege waardes teruggaf voor een leeg jaar).
     if (empty($ditjaar_all_count) || $ditjaar_all_count == 0) {
-        $ditjaardeelnot     = 1;
-        $ditjaarleidnot     = 1;
+        $ditjaardeelnot                 = 1;
+        $ditjaarleidnot                 = 1;
     }
 
-    wachthond($extdebug,3, 'diteventdeelyes',   $diteventdeelyes);
-    wachthond($extdebug,3, 'diteventdeelmss',   $diteventdeelmss);
-    wachthond($extdebug,3, 'diteventleidyes',   $diteventleidyes);
-    wachthond($extdebug,3, 'diteventleidmss',   $diteventleidmss);
+    wachthond($extdebug, 3, 'diteventdeelyes',                  $diteventdeelyes);
+    wachthond($extdebug, 3, 'diteventdeelmss',                  $diteventdeelmss);
+    wachthond($extdebug, 3, 'diteventleidyes',                  $diteventleidyes);
+    wachthond($extdebug, 3, 'diteventleidmss',                  $diteventleidmss);
 
-    wachthond($extdebug,2, "########################################################################");    
+    wachthond($extdebug, 2, "########################################################################");    
 
-    wachthond($extdebug,3, 'ditjaardeelyes',    $ditjaardeelyes);
-    wachthond($extdebug,3, 'ditjaardeelmss',    $ditjaardeelmss);
-    wachthond($extdebug,3, 'ditjaarleidyes',    $ditjaarleidyes);
-    wachthond($extdebug,3, 'ditjaarleidmss',    $ditjaarleidmss);
+    wachthond($extdebug, 3, 'ditjaardeelyes',                   $ditjaardeelyes);
+    wachthond($extdebug, 3, 'ditjaardeelmss',                   $ditjaardeelmss);
+    wachthond($extdebug, 3, 'ditjaarleidyes',                   $ditjaarleidyes);
+    wachthond($extdebug, 3, 'ditjaarleidmss',                   $ditjaarleidmss);
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,2, "### 2.8 TOON DEFINITIEVE DEELNAMESTATUS VAN DIT JAAR EN DIT EVENT");
-    wachthond($extdebug,2, "########################################################################");
+    wachthond($extdebug, 2, "########################################################################");
+    wachthond($extdebug, 1, "### 2.8 TOON DEFINITIEVE DEELNAMESTATUS VAN DIT JAAR EN DIT EVENT");
+    wachthond($extdebug, 2, "########################################################################");
 
     if ($ditjaar_all_count >= 1) {
-        wachthond($extdebug,1,  "DITJAAR      $ditjaar_part_kampjaar GAAT $displayname $ditjaardeeltxt MEE ALS DEEL",  
+        wachthond($extdebug, 1, "DITJAAR      $ditjaar_part_kampjaar GAAT $displayname $ditjaardeeltxt MEE ALS DEEL",  
                   "[EID $ditjaar_pos_deel_eventid\tPID $ditjaar_pos_deel_part_id\t$ditjaar_pos_deel_kampkort]");
-        wachthond($extdebug,1,  "DITJAAR      $ditjaar_part_kampjaar GAAT $displayname $ditjaarleidtxt MEE ALS LEID",
+        wachthond($extdebug, 1, "DITJAAR      $ditjaar_part_kampjaar GAAT $displayname $ditjaarleidtxt MEE ALS LEID",
                   "[EID $ditjaar_pos_leid_eventid\tPID $ditjaar_pos_leid_part_id\t$ditjaar_pos_leid_kampkort]");
-        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug, 2, "########################################################################");
     } else {
-        wachthond($extdebug,1,  "DITJAAR      $ditjaar_part_kampjaar GAAT $displayname NIET MEE OP KAMP");
+        wachthond($extdebug, 1, "DITJAAR      $ditjaar_part_kampjaar GAAT $displayname NIET MEE OP KAMP");
     }
+
     if ($ditevent_part_id >= 1) {
-        wachthond($extdebug,1,  "DITEVENT     $ditevent_kampjaar GAAT $displayname $diteventdeeltxt MEE ALS DEEL",
+        wachthond($extdebug, 1, "DITEVENT     $ditevent_kampjaar GAAT $displayname $diteventdeeltxt MEE ALS DEEL",
                   "[EID $ditevent_part_eventid\tPID $ditevent_part_id\t$ditevent_event_kampkort]");
-        wachthond($extdebug,1,  "DITEVENT     $ditevent_kampjaar GAAT $displayname $diteventleidtxt MEE ALS LEID",
+        wachthond($extdebug, 1, "DITEVENT     $ditevent_kampjaar GAAT $displayname $diteventleidtxt MEE ALS LEID",
                   "[EID $ditevent_part_eventid\tPID $ditevent_part_id\t$ditevent_event_kampkort]");
-        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug, 2, "########################################################################");
     } else {
-        wachthond($extdebug,1,  "DITEVENT     [ER WORDT GEEN EVENT BEWERKT]");
+        wachthond($extdebug, 1, "DITEVENT     [ER WORDT GEEN EVENT BEWERKT]");
     }
-/*
-    if ($eventjaar_pos_part_id >= 1) {
-        wachthond($extdebug,1,  "EVENTJAAR    $ditevent_kampjaar GAAT $displayname $eventjaardeeltxt MEE ALS DEEL",
-                  "[EID $eventjaar_pos_deel_event_id\tPID $eventjaar_pos_deel_part_id\t$eventjaar_pos_deel_kampkort]");
-        wachthond($extdebug,1,  "EVENTJAAR    $ditevent_kampjaar GAAT $displayname $eventjaarleidtxt MEE ALS LEID",
-                  "[EID $eventjaar_pos_leid_event_id\tPID $eventjaar_pos_deel_part_id\t$eventjaar_pos_leid_kampkort]");
-        wachthond($extdebug,3,  "########################################################################");
-    } else {
-        wachthond($extdebug,1,  "EVENTJAAR    [ER WORDT GEEN EVENT BEWERKT]");
-    }
-*/
-    wachthond($extdebug,4, "########################################################################");
-    wachthond($extdebug,1, "### CORE 2.X EINDE BEPAAL BASISINFO VOOR DIT CONTACT / DEZE PARTICIPANT", "$displayname");
-    wachthond($extdebug,3, "########################################################################");
-    wachthond($extdebug,4, 'new_ditevent_criteria_indicatie',       $new_ditevent_criteria_indicatie);
-    wachthond($extdebug,4, 'new_ditevent_criteria_oordeel',         $new_ditevent_criteria_oordeel);
-    wachthond($extdebug,4, 'new_ditjaar_criteria_indicatie',        $new_ditjaar_criteria_indicatie);
-    wachthond($extdebug,4, 'new_ditjaar_criteria_oordeel',          $new_ditjaar_criteria_oordeel);
-
-    } else {
-
-        wachthond($extdebug,4, "########################################################################");
-        wachthond($extdebug,1, "### CORE 2.X SKIPPED BEPAAL BASISINFO VOOR DIT CONTACT / DEZE PARTICIPANT", "[groupID: $groupID] [op: $op] [entityID: $entityID]");
-        wachthond($extdebug,4, "########################################################################");
-
-        wachthond($extdebug,4, 'new_ditevent_criteria_indicatie',   $new_ditevent_criteria_indicatie);
-        wachthond($extdebug,4, 'new_ditevent_criteria_oordeel',     $new_ditevent_criteria_oordeel);
-        wachthond($extdebug,4, 'new_ditjaar_criteria_indicatie',    $new_ditjaar_criteria_indicatie);
-        wachthond($extdebug,4, 'new_ditjaar_criteria_oordeel',      $new_ditjaar_criteria_oordeel);
-    } 
+}   // M61:KLOPT DIT WEL, WAS ENE GOKJE OMDAT IK EEN UNCLOSED } ERROR KREEG
 
     watchdog('civicrm_timing', core_microtimer("EINDE 2.X bepaal basisinfo"), NULL, WATCHDOG_DEBUG);
 
@@ -3222,7 +3057,7 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
             $default_groepsnaam     = 'Team Oempaloempa';
 
             // Deze code runt alleen als de datum van het huidige jaar < 20 juni
-            if ($today_datetime < date("Y") . "-06-20 00:00:00") {
+            if ($todaydatetime < date("Y") . "-06-20 00:00:00") {
 
                 if (empty($ditjaar_part_groepsletter))     { $ditjaar_part_groepsletter   = $default_groepsletter;  }
                 if (empty($ditjaar_part_groepskleur))      { $ditjaar_part_groepskleur    = $default_groepskleur;   }
@@ -3446,20 +3281,9 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
 
             $params_contact['values']['DITJAAR.ditjaar_groep_klas']         = $ditjaar_part_groepklas;
             $params_contact['values']['DITJAAR.ditjaar_voorkeur']           = $ditjaar_part_voorkeur;
-/*
-            $params_contact['values']['DITJAAR.ditjaar_leeftijd']           = $new_ditjaar_criteria_leeftijd;
-            $params_contact['values']['DITJAAR.ditjaar_school']             = $new_ditjaar_criteria_school;
-            $params_contact['values']['DITJAAR.ditjaar_criteria_indicatie'] = $new_ditjaar_criteria_indicatie;
-            $params_contact['values']['DITJAAR.ditjaar_criteria_oordeel']   = $new_ditjaar_criteria_oordeel;
-*/
+
             wachthond($extdebug,3, 'ditjaar_part_groepklas',            $ditjaar_part_groepklas);
             wachthond($extdebug,3, 'ditjaar_part_voorkeur',             $ditjaar_part_voorkeur);
-/*
-            wachthond($extdebug,2, 'new_ditjaar_criteria_leeftijd',     $new_ditjaar_criteria_leeftijd);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_school',       $new_ditjaar_criteria_school);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_indicatie',    $new_ditjaar_criteria_indicatie);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_oordeel',      $new_ditjaar_criteria_oordeel);
-*/
         }
 
         ################################################################
@@ -3474,12 +3298,12 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
 
             // M61: TODO URGENT: DEZE KLOPT NOG NIET
             $params_contact['values']['DITJAAR.ditjaar_kid']                    = $eventkamp_event_id;
-
+/*
             $params_contact['values']['DITJAAR.ditjaar_leeftijd']               = "";
             $params_contact['values']['DITJAAR.ditjaar_school']                 = "";
             $params_contact['values']['DITJAAR.ditjaar_criteria_indicatie']     = "";
             $params_contact['values']['DITJAAR.ditjaar_criteria_indicatie']     = "";
-
+*/
         }
 
         #####################################################
@@ -3537,33 +3361,6 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
                 $params_contact['values']['DITJAAR.ditjaar_rol']                = $ditjaar_part_rol;
                 $params_contact['values']['DITJAAR.ditjaar_functie']            = $ditjaar_part_functie;
             }
-
-        #####################################################
-        ### DIT EVENT & DIT JAAR DEEL
-        #####################################################
-/*
-        if (in_array($ditjaar_prim_event_type_id, $eventtypesdeelall)) {
-
-            wachthond($extdebug,2, "########################################################################");
-            wachthond($extdebug,1, "### CORE 8.1 h IF DITEVENT == PRIMAIR EVENTID VAN DIT JAAR", "[EVENTTYPE = DEEL]");
-            wachthond($extdebug,3, "########################################################################");
-
-            $params_contact['values']['DITJAAR.ditjaar_leeftijd']               = $new_ditjaar_criteria_leeftijd;
-            $params_contact['values']['DITJAAR.ditjaar_school']                 = $new_ditjaar_criteria_school;
-            $params_contact['values']['DITJAAR.ditjaar_criteria_indicatie']     = $new_ditjaar_criteria_indicatie;
-            $params_contact['values']['DITJAAR.ditjaar_criteria_oordeel']       = $new_ditjaar_criteria_oordeel;
-
-            $params_contact['values']['DITJAAR.ditjaar_wachtlijst_erop']        = $new_ditevent_wachtlijst_erop;
-            $params_contact['values']['DITJAAR.ditjaar_wachtlijst_eraf']        = $new_ditevent_wachtlijst_eraf;
-            $params_contact['values']['DITJAAR.ditjaar_criteriacheck_start']    = $new_ditevent_criteriacheck_start;
-            $params_contact['values']['DITJAAR.ditjaar_criteriacheck_einde']    = $new_ditevent_criteriacheck_einde;
-
-            wachthond($extdebug,2, 'new_ditjaar_criteria_leeftijd',             $new_ditjaar_criteria_leeftijd);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_school',               $new_ditjaar_criteria_school);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_indicatie',            $new_ditjaar_criteria_indicatie);
-            wachthond($extdebug,2, 'new_ditjaar_criteria_oordeel',              $new_ditjaar_criteria_oordeel);
-        }
-*/  
 
         #####################################################
         ### DIT EVENT & DIT JAAR DEEL = YES
@@ -3768,43 +3565,6 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
         wachthond($extdebug,3, 'params_part_dusver',    $params_part_ditevent);
 
         #####################################################
-        ### DIT EVENT DEEL [YES + MSS + TST]
-        #####################################################
-
-        if ($diteventdeelyes == 1 OR $diteventdeelmss == 1 OR $diteventdeeltst == 1) {
-
-            if ($ditevent_part_1stdeel) {
-                $params_part_ditevent['values']['PART.PART_1xkeer_deel']               = $ditevent_part_1stdeel;
-            }
-/*            
-            if ($new_ditevent_criteria_leeftijd)  { 
-                $params_part_ditevent['values']['PART_DEEL_INTERN.criteria_leeftijd']  = $new_ditevent_criteria_leeftijd;
-            }
-            if ($new_ditevent_criteria_school)    {
-                $params_part_ditevent['values']['PART_DEEL_INTERN.criteria_school']    = $new_ditevent_criteria_school;
-            }
-            if ($new_ditevent_criteria_indicatie)   {
-                $params_part_ditevent['values']['PART_DEEL_INTERN.criteria_indicatie'] = $new_ditevent_criteria_indicatie;
-            }
-            if ($new_ditevent_criteria_oordeel) {
-                $params_part_ditevent['values']['PART_DEEL_INTERN.criteria_oordeel']   = $new_ditevent_criteria_oordeel;
-            }
-            if ($new_ditevent_wachtlijst_erop) {
-                $params_part_ditevent['values']['PART_DEEL_INTERN.wachtlijst_erop']    = $new_ditevent_wachtlijst_erop;
-            }
-            if ($new_ditevent_wachtlijst_eraf) {
-                $params_part_ditevent['values']['PART_DEEL_INTERN.wachtlijst_eraf']    = $new_ditevent_wachtlijst_eraf;
-            }
-            if ($new_ditevent_criteriacheck_start != NULL) {
-                $params_part_ditevent['values']['PART_DEEL_INTERN.criteriacheck_start'] = $new_ditevent_criteriacheck_start;
-            }
-            if ($new_ditevent_criteriacheck_einde != NULL) {
-                $params_part_ditevent['values']['PART_DEEL_INTERN.criteriacheck_einde'] = $new_ditevent_criteriacheck_einde;
-            }
-  */
-        }
-
-        #####################################################
         ### DIT EVENT LEID [YES + MSS + TST]
         #####################################################
 
@@ -3873,56 +3633,7 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
     wachthond($extdebug,4, 'params_part_dusver',    $params_part_ditevent);
 
     }
-/*
-    ##########################################################################################
-    # 8.3 UPDATE PARAMS_CONTACT MET STATISTIEKEN
-    if ($extdjcont == 123 AND in_array($groupID, $profilecont)) {     // PROFILE CONT + PART (BASIC)
-    ##########################################################################################
 
-        wachthond($extdebug,1, "### CORE 8.3 UPDATE PARAMS_CONTACT MET STATS KAMPCV ###", "[groupID: $groupID] [op: $op]");
-
-        wachthond($extdebug,3, "eerstekeer",    $eerste_keer);
-        wachthond($extdebug,3, "laatstekeer",   $laatste_keer);
-
-        $params_contact['values']['Curriculum.Eerste_keer']                 = $eerste_keer;
-        $params_contact['values']['Curriculum.Laatste_keer']                = $laatste_keer;
-        $params_contact['values']['Curriculum.Totaal_keren_mee']            = $totaal_mee;
-
-        if ($exttag == 1) {
-          // TODO $params_contact['custom_856']     = $tagcv_deel;
-          // TODO $params_contact['custom_848']     = $tagnr_deel;
-          // TODO $params_contact['custom_857']     = $tagcv_leid; // M61 URGENT TODO FIX THIS (BECOMES EMPTY SOMETIMES)
-          // TODO $params_contact['custom_849']     = $tagnr_leid;
-          // TODO $params_contact['custom_850']     = $tagverschildeel;
-          // TODO $params_contact['custom_851']     = $tagverschilleid;
-        }
-
-        if ($cv_deel) { $params_contact['values']['Curriculum.CV_Deel']     = $cv_deel;     }
-        $params_contact['values']['Curriculum.Keren_Deel']                  = $keren_deel;
-        $params_contact['values']['Curriculum.Eerste_deel']                 = $eerste_deel;
-        $params_contact['values']['Curriculum.Laatste_deel']                = $laatste_deel;
-        $params_contact['values']['Curriculum.EventCV_Deel']                = $evtcv_deel;
-        $params_contact['values']['Curriculum.EventTotaal_Deel']            = $evtcv_deel_nr;
-        $params_contact['values']['Curriculum.Eventverschil_Deel']          = $evtcv_deel_dif;
-
-        $params_contact['values']['Curriculum.Keren_Topkamp']               = $keren_top;
-        $params_contact['values']['Curriculum.Eerste_Topkamp']              = $eerste_top;
-        $params_contact['values']['Curriculum.Laatste_Topkamp']             = $laatste_top;
-
-        if ($cv_leid) { $params_contact['values']['Curriculum.CV_Leid']     = $cv_leid;     }
-        $params_contact['values']['Curriculum.Keren_Leid']                  = $keren_leid;
-        $params_contact['values']['Curriculum.Eerste_leid']                 = $eerste_leid;
-        $params_contact['values']['Curriculum.Laatste_leid']                = $laatste_leid;
-        $params_contact['values']['Curriculum.EventCV_Leid']                = $evtcv_leid;
-        $params_contact['values']['Curriculum.EventTotaal_Leid']            = $evtcv_leid_nr;
-        $params_contact['values']['Curriculum.Eventverschil_Leid']          = $evtcv_deel_dif;
-
-        $params_contact['values']['Curriculum.CV_deel_text_']               = $cv_deel_text;
-        $params_contact['values']['Curriculum.CV_leid_text_']               = $cv_leid_text;
-
-        wachthond($extdebug, 8, 'params_cont_dusver', $params_contact);
-      }
-*/
     ##########################################################################################
     # 8.5 a RETRIEVE RELATED HOOFDLEIDING
     ##########################################################################################
@@ -4353,14 +4064,6 @@ if (in_array($groupID, $profilecvmax)) { // PROFILE CONT & PART (BASIC)
  *
  * @param $files array(string)
  */
-
-
-/*
-function core_civicrm_xmlMenu(&$files) {
-  _core_civix_civicrm_xmlMenu($files);
-}
-*/
-
 
 /**
  * Implementation of hook_civicrm_install
