@@ -339,431 +339,453 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     ### GET PARTICIPANT INFO BASED ON PID
     ###########################################################################################
 
-    $part_id = $entityID;
+    if (in_array($groupID, $profilepartmax)) {  // PROFILE PART MAX
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,1, "### CORE 1.0 GET PART INFO BASED ON PARTID",            "[PID: $part_id]");
-    wachthond($extdebug,3, "########################################################################");
-
-    # A. als partitipant wordt bewerkt dan zoek dan de participant info van dat event
-    # B. indien participant die wordt bewerkt is gecancelled check of er een andere reg is die niet gecancceled is
-    # C. indien contact wordt geedit (en geen participant), check dan  op eem actieve registratie dit fiscale jaar
-    # D. indien dit allemaal niet het geval is, gewoon basic info ophalen voor het contact
-
-    // 101  EVENT KENMERKEN
-    // 139  PART DEEL
-    // 190  PART LEID
-    // (140 PART LEID VOG)
-    // 106  TAB  WERVING
-    // 103  TAB  CURRICULUM
-    // 149  TAB  TALENT
-    // 150  TAB  PROMOTIE
-    // 205  PART 
-    // 225  JAAROVERZICHT
-
-    wachthond($extdebug,2, "pid2part met als input part_id (entityid)", "[PID: $part_id]"); 
-
-    watchdog('civicrm_timing', core_microtimer("START pid2part"), NULL, WATCHDOG_DEBUG);
-    $array_partditevent = base_pid2part($part_id);
-    watchdog('civicrm_timing', core_microtimer("EINDE pid2part"), NULL, WATCHDOG_DEBUG);
-
-    wachthond($extdebug,3, "########################################################################");
-    wachthond($extdebug,2, "array_partditevent",                                  $array_partditevent);
-    wachthond($extdebug,3, "########################################################################");
-
-    $contact_id                         = $array_partditevent['contact_id']                     ?? NULL;
-    $ditevent_displayname               = $array_partditevent['displayname']                    ?? NULL;
-
-    $ditevent_part_contact_id           = $array_partditevent['contact_id']                     ?? NULL;
-    $ditevent_part_eventid              = $array_partditevent['event_id']                       ?? NULL;
-    $ditevent_part_id                   = $array_partditevent['id']                             ?? NULL;
-    $ditevent_part_role_id              = $array_partditevent['role_id']                        ?? NULL;
-    $ditevent_part_status_id            = $array_partditevent['status_id']                      ?? NULL;
-    $ditevent_part_status_name          = $array_partditevent['status_name']                    ?? NULL;
-
-    $ditevent_eventid                   = $array_partditevent['part_event_id']                  ?? NULL;
-    $ditevent_event_title               = $array_partditevent['event_title']                    ?? NULL;
-    $ditevent_event_type_id             = $array_partditevent['event_type_id']                  ?? NULL;
-    $ditevent_event_type_label          = $array_partditevent['event_type_label']               ?? NULL;
-
-    $ditevent_register_date             = $array_partditevent['register_date']                  ?? NULL;
-    $ditevent_event_start               = $array_partditevent['event_start_date']               ?? NULL;
-    $ditevent_event_einde               = $array_partditevent['event_end_date']                 ?? NULL;
-    $ditevent_kampjaar                  = $array_partditevent['part_kampjaar']                  ?? NULL;
-
-    $ditevent_event_kampnaam            = $array_partditevent['kenmerken_kampnaam']             ?? NULL;
-    $ditevent_event_kampkort            = $array_partditevent['kenmerken_kampkort']             ?? NULL;
-    $ditevent_event_kampkort_low        = $array_partditevent['kenmerken_kampkort_low']         ?? NULL;
-    $ditevent_event_kampkort_cap        = $array_partditevent['kenmerken_kampkort_cap']         ?? NULL;
-
-    $ditevent_event_kamptype            = $array_partditevent['kenmerken_kamptype_naam']        ?? NULL;
-    $ditevent_event_kamptype_naam       = $array_partditevent['kenmerken_kamptype_naam']        ?? NULL;
-    $ditevent_event_kamptype_label      = $array_partditevent['kenmerken_kamptype_label']       ?? NULL;
-    $ditevent_event_kamptype_id         = $array_partditevent['kenmerken_kamptype_id']          ?? NULL;
-    $ditevent_event_kampsoort           = $array_partditevent['kenmerken_kampsoort']            ?? NULL;
-
-    $ditevent_part_kampnaam             = $array_partditevent['part_kampnaam']                  ?? NULL;
-    $ditevent_part_kampkort             = $array_partditevent['part_kampkort']                  ?? NULL;
-    $ditevent_part_kampkort_low         = $array_partditevent['part_kampkort_low']              ?? NULL;
-    $ditevent_part_kampkort_cap         = $array_partditevent['part_kampkort_cap']              ?? NULL;
-
-    $ditevent_part_kamptype_id          = $array_partditevent['part_kamptype_id']               ?? NULL;
-    $ditevent_part_functie              = $array_partditevent['part_functie']                   ?? NULL;
-    $ditevent_part_rol                  = $array_partditevent['part_rol']                       ?? NULL;
-    $ditevent_leid_welkkamp             = $array_partditevent['part_leid_kamp']                 ?? NULL;
-    $ditevent_leid_functie              = $array_partditevent['part_leid_functie']              ?? NULL;
-
-    $ditevent_event_brengen_van         = $array_partditevent['event_brengen_van']              ?? NULL;
-    $ditevent_event_brengen_tot         = $array_partditevent['event_brengen_tot']              ?? NULL;
-    $ditevent_event_pres_van            = $array_partditevent['event_pres_van']                 ?? NULL;
-    $ditevent_event_pres_tot            = $array_partditevent['event_pres_tot']                 ?? NULL;
-    $ditevent_event_halen_van           = $array_partditevent['event_halen_van']                ?? NULL;
-    $ditevent_event_halen_tot           = $array_partditevent['event_halen_tot']                ?? NULL;
-
-    $ditevent_event_thema_naam          = $array_partditevent['event_thema_naam']               ?? NULL;
-    $ditevent_event_thema_info          = $array_partditevent['event_thema_info']               ?? NULL;
-    $ditevent_event_goeddoel_naam       = $array_partditevent['event_goeddoel_naam']            ?? NULL;
-    $ditevent_event_goeddoel_info       = $array_partditevent['event_goeddoel_info']            ?? NULL;
-    $ditevent_event_goeddoel_link       = $array_partditevent['event_goeddoel_link']            ?? NULL;
-
-    $ditevent_part_1stdeel              = $array_partditevent['part_1stdeel']                   ?? NULL;
-    $ditevent_part_1stleid              = $array_partditevent['part_1stleid']                   ?? NULL;
-
-    $ditevent_part_nawgecheckt          = $array_partditevent['part_nawgecheckt']               ?? NULL;
-    $ditevent_part_biogecheckt          = $array_partditevent['part_biogecheckt']               ?? NULL;
-
-    $org_ditpart_nawgecheckt            = $ditevent_part_nawgecheckt;
-    $new_ditpart_nawgecheckt            = $ditevent_part_nawgecheckt;
-
-    $org_ditpart_biogecheckt            = $ditevent_part_biogecheckt;
-    $new_ditpart_biogecheckt            = $ditevent_part_biogecheckt;
-
-    $ditevent_part_groepklas            = $array_partditevent['part_groepklas']             ?? NULL;
-    $ditevent_part_voorkeur             = $array_partditevent['part_voorkeur']              ?? NULL;
-    $ditevent_part_groepsletter         = $array_partditevent['part_groepsletter']          ?? NULL;
-    $ditevent_part_groepskleur          = $array_partditevent['part_groepskleur']           ?? NULL;
-    $ditevent_part_groepsnaam           = $array_partditevent['part_groepsnaam']            ?? NULL;
-    $ditevent_part_slaapzaal            = $array_partditevent['part_slaapzaal']             ?? NULL;
-
-    $ditevent_wachtlijst_erop           = $array_partditevent['part_wachtlijst_erop']       ?? NULL;
-    $ditevent_wachtlijst_eraf           = $array_partditevent['part_wachtlijst_eraf']       ?? NULL;
-    $ditevent_criteriacheck_start       = $array_partditevent['part_criteriacheck_start']   ?? NULL;
-    $ditevent_criteriacheck_einde       = $array_partditevent['part_criteriacheck_einde']   ?? NULL;
-
-    $ditevent_criteria_indicatie        = $array_partditevent['part_criteria_indicatie']    ?? NULL;
-    $ditevent_criteria_oordeel          = $array_partditevent['part_criteria_oordeel']      ?? NULL;
-
-    $new_ditevent_criteria_indicatie    = $ditevent_criteria_indicatie;
-    $new_ditevent_criteria_oordeel      = $ditevent_criteria_oordeel; 
-
-    $ditevent_part_notificatie_deel     = $array_partditevent['part_notificatie_deel']      ?? NULL;
-    $ditevent_part_notificatie_leid     = $array_partditevent['part_notificatie_leid']      ?? NULL;
-    $ditevent_part_notificatie_kamp     = $array_partditevent['part_notificatie_kamp']      ?? NULL;
-    $ditevent_part_notificatie_staf     = $array_partditevent['part_notificatie_staf']      ?? NULL;
-    $ditevent_part_notificatie_priv     = $array_partditevent['part_notificatie_priv']      ?? NULL;
-
-    $ditevent_part_kampgeld_contribid   = $array_partditevent['part_kampgeld_contribid']    ?? NULL;
-    $ditevent_part_kampgeld_regeling    = $array_partditevent['part_kampgeld_regeling']     ?? NULL;
-    $ditevent_part_kampgeld_fietshuur   = $array_partditevent['part_kampgeld_fietshuur']    ?? NULL;
-    $ditevent_event_fietsevent          = $array_partditevent['event_fietsevent']           ?? NULL;
-
-    $ditevent_part_evaluatie_datum      = $array_partditevent['part_evaluatie_datum']       ?? NULL;
-
-    if (in_array($ditevent_event_type_id, $eventtypesleidall)) {
-        $ditevent_part_vogverzocht      = $array_partditevent['part_vogverzocht']           ?? NULL;
-        $ditevent_part_vogingediend     = $array_partditevent['part_vogingediend']          ?? NULL;
-        $ditevent_part_vogontvangst     = $array_partditevent['part_vogontvangst']          ?? NULL;
-        $ditevent_part_vogdatum         = $array_partditevent['part_vogdatum']              ?? NULL;
-        $ditevent_part_vogkenmerk       = $array_partditevent['part_vogkenmerk']            ?? NULL;
-    }
-
-    if ($ditevent_part_eventid > 0) {
+        $part_id = $entityID;
 
         wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 1.1 GET EVENT INFO BASED ON EVENTID", "[EID: $ditevent_part_eventid / PID: $ditevent_part_id]");
+        wachthond($extdebug,1, "### CORE 1.0 GET PART INFO BASED ON PARTID",            "[PID: $part_id]");
         wachthond($extdebug,3, "########################################################################");
 
-        $array_eventinfo_ditevent = base_eid2event($ditevent_part_eventid, $ditevent_part_id);
+        # A. als partitipant wordt bewerkt dan zoek dan de participant info van dat event
+        # B. indien participant die wordt bewerkt is gecancelled check of er een andere reg is die niet gecancceled is
+        # C. indien contact wordt geedit (en geen participant), check dan  op eem actieve registratie dit fiscale jaar
+        # D. indien dit allemaal niet het geval is, gewoon basic info ophalen voor het contact
 
-        wachthond($extdebug,4, "########################################################################");
-        wachthond($extdebug,3, "array_eventinfo_ditevent",                     $array_eventinfo_ditevent);
-        wachthond($extdebug,4, "########################################################################");
+        // 101  EVENT KENMERKEN
+        // 139  PART DEEL
+        // 190  PART LEID
+        // (140 PART LEID VOG)
+        // 106  TAB  WERVING
+        // 103  TAB  CURRICULUM
+        // 149  TAB  TALENT
+        // 150  TAB  PROMOTIE
+        // 205  PART 
+        // 225  JAAROVERZICHT
 
-        $eventkamp_event_id             = $array_eventinfo_ditevent['eventkamp_event_id']           ?? NULL;
-        $eventkamp_event_type_id        = $array_eventinfo_ditevent['eventkamp_event_type_id']      ?? NULL;
-        $eventkamp_event_type_id_label  = $array_eventinfo_ditevent['eventkamp_event_type_id_label']?? NULL; 
+        wachthond($extdebug,2, "pid2part met als input part_id (entityid)", "[PID: $part_id]"); 
 
-        $eventkamp_kamptype_naam        = $array_eventinfo_ditevent['eventkamp_kamptype_naam']      ?? NULL;
-        $eventkamp_kamptype_label       = $array_eventinfo_ditevent['eventkamp_kamptype_label']     ?? NULL;
-        $eventkamp_kamptype_id          = $array_eventinfo_ditevent['eventkamp_kamptype_id']        ?? NULL;
-        $eventkamp_kampsoort            = $array_eventinfo_ditevent['eventkamp_kampsoort']          ?? NULL;
+        watchdog('civicrm_timing', core_microtimer("START pid2part"), NULL, WATCHDOG_DEBUG);
+        $array_partditevent = base_pid2part($part_id);
+        watchdog('civicrm_timing', core_microtimer("EINDE pid2part"), NULL, WATCHDOG_DEBUG);
 
-        $eventkamp_kampnaam             = $array_eventinfo_ditevent['eventkamp_kampnaam']           ?? NULL;
-        $eventkamp_kampkort             = $array_eventinfo_ditevent['eventkamp_kampkort']           ?? NULL;
-        $eventkamp_kampkort_low         = $array_eventinfo_ditevent['eventkamp_kampkort_low']       ?? NULL;
-        $eventkamp_kampkort_cap         = $array_eventinfo_ditevent['eventkamp_kampkort_cap']       ?? NULL;
-
-        $eventkamp_event_start          = $array_eventinfo_ditevent['eventkamp_event_start']        ?? NULL;
-        $eventkamp_event_einde          = $array_eventinfo_ditevent['eventkamp_event_einde']        ?? NULL;
-        $eventkamp_event_weeknr         = $array_eventinfo_ditevent['eventkamp_event_weeknr']       ?? NULL;
-
-        $eventkamp_fiscalyear_start     = $array_eventinfo_ditevent['eventkamp_fiscalyear_start']   ?? NULL;
-        $eventkamp_fiscalyear_einde     = $array_eventinfo_ditevent['eventkamp_fiscalyear_einde']   ?? NULL;
-        $eventkamp_kampjaar             = $array_eventinfo_ditevent['eventkamp_kampjaar']           ?? NULL;
-        $eventkamp_kampjaarkort         = $array_eventinfo_ditevent['eventkamp_kampjaarkort']       ?? NULL;
-
-        $eventkamp_plek                 = $array_eventinfo_ditevent['eventkamp_plek']               ?? NULL;
-        $eventkamp_stad                 = $array_eventinfo_ditevent['eventkamp_stad']               ?? NULL;
-        $eventkamp_pleklang             = $array_eventinfo_ditevent['eventkamp_pleklang']           ?? NULL;
-        $eventkamp_stadlang             = $array_eventinfo_ditevent['eventkamp_stadlang']           ?? NULL;
-
-        $eventkamp_brengen_van          = $array_eventinfo_ditevent['eventkamp_brengen_van']        ?? NULL;
-        $eventkamp_brengen_tot          = $array_eventinfo_ditevent['eventkamp_brengen_tot']        ?? NULL;
-        $eventkamp_pres_van             = $array_eventinfo_ditevent['eventkamp_pres_van']           ?? NULL;
-        $eventkamp_pres_tot             = $array_eventinfo_ditevent['eventkamp_pres_tot']           ?? NULL;
-        $eventkamp_halen_van            = $array_eventinfo_ditevent['eventkamp_halen_van']          ?? NULL;
-        $eventkamp_halen_tot            = $array_eventinfo_ditevent['eventkamp_halen_tot']          ?? NULL;
-
-        $eventkamp_thema_naam           = $array_eventinfo_ditevent['eventkamp_thema_naam']         ?? NULL;
-        $eventkamp_thema_info           = $array_eventinfo_ditevent['eventkamp_thema_info']         ?? NULL;
-        $eventkamp_goeddoel_naam        = $array_eventinfo_ditevent['eventkamp_goeddoel_naam']      ?? NULL;
-        $eventkamp_goeddoel_info        = $array_eventinfo_ditevent['eventkamp_goeddoel_info']      ?? NULL;
-        $eventkamp_goeddoel_link        = $array_eventinfo_ditevent['eventkamp_goeddoel_link']      ?? NULL;
-
-        $eventkamp_welkomvideo          = $array_eventinfo_ditevent['eventkamp_welkomvideo']        ?? NULL;
-        $eventkamp_slotvideo            = $array_eventinfo_ditevent['eventkamp_slotvideo']          ?? NULL;
-        $eventkamp_extrabagage          = $array_eventinfo_ditevent['eventkamp_extrabagage']        ?? NULL;
-        $eventkamp_playlist             = $array_eventinfo_ditevent['eventkamp_playlist']           ?? NULL;
-        $eventkamp_doc_link             = $array_eventinfo_ditevent['eventkamp_doc_link']           ?? NULL;
-        $eventkamp_doc_info             = $array_eventinfo_ditevent['eventkamp_doc_info']           ?? NULL;
-        $eventkamp_foto_vraag           = $array_eventinfo_ditevent['eventkamp_foto_vraag']         ?? NULL;
-        $eventkamp_foto_album           = $array_eventinfo_ditevent['eventkamp_foto_album']         ?? NULL;
-    
-        $eventkamp_event_hldn1_id       = $array_eventinfo_ditevent['event_hldn1_id']               ?? NULL;
-        $eventkamp_event_hldn2_id       = $array_eventinfo_ditevent['event_hldn2_id']               ?? NULL;
-        $eventkamp_event_hldn3_id       = $array_eventinfo_ditevent['event_hldn3_id']               ?? NULL;
-
-        $eventkamp_event_kern1_id       = $array_eventinfo_ditevent['event_kern1_id']               ?? NULL;
-        $eventkamp_event_kern2_id       = $array_eventinfo_ditevent['event_kern2_id']               ?? NULL;
-        $eventkamp_event_kern3_id       = $array_eventinfo_ditevent['event_kern3_id']               ?? NULL;
-
-        $eventkamp_event_gedrag0_id     = $array_eventinfo_ditevent['event_gedrag0_id']             ?? NULL;
-        $eventkamp_event_gedrag1_id     = $array_eventinfo_ditevent['event_gedrag1_id']             ?? NULL;
-        $eventkamp_event_gedrag2_id     = $array_eventinfo_ditevent['event_gedrag2_id']             ?? NULL;
-
-        $eventkamp_event_keuken0_id     = $array_eventinfo_ditevent['event_keuken0_id']             ?? NULL;
-        $eventkamp_event_keuken1_id     = $array_eventinfo_ditevent['event_keuken1_id']             ?? NULL;
-        $eventkamp_event_keuken2_id     = $array_eventinfo_ditevent['event_keuken2_id']             ?? NULL;
-        $eventkamp_event_keuken3_id     = $array_eventinfo_ditevent['event_keuken3_id']             ?? NULL;
-
-        $eventkamp_event_boekje0_id     = $array_eventinfo_ditevent['event_boekje0_id']             ?? NULL;
-        $eventkamp_event_boekje1_id     = $array_eventinfo_ditevent['event_boekje1_id']             ?? NULL;
-        $eventkamp_event_boekje2_id     = $array_eventinfo_ditevent['event_boekje2_id']             ?? NULL;
-
-        // --- 2. BOUW DE ROLLEN ARRAY VOOR ACL ---
-        // Deze array geven we door aan de ACL module.
-        $ditevent_rollen_array = array(
-            'event_hldn1_id'    => $eventkamp_event_hldn1_id,
-            'event_hldn2_id'    => $eventkamp_event_hldn2_id,
-            'event_hldn3_id'    => $eventkamp_event_hldn3_id,
-
-            'event_kern1_id'    => $eventkamp_event_kern1_id,
-            'event_kern2_id'    => $eventkamp_event_kern2_id,
-            'event_kern3_id'    => $eventkamp_event_kern3_id,
-
-            'event_gedrag0_id'  => $eventkamp_event_gedrag0_id,
-            'event_gedrag1_id'  => $eventkamp_event_gedrag1_id,
-            'event_gedrag2_id'  => $eventkamp_event_gedrag2_id,
-
-            'event_keuken0_id'  => $eventkamp_event_keuken0_id,
-            'event_keuken1_id'  => $eventkamp_event_keuken1_id,
-            'event_keuken2_id'  => $eventkamp_event_keuken2_id,
-            'event_keuken3_id'  => $eventkamp_event_keuken3_id,
-
-            'event_boekje0_id'  => $eventkamp_event_boekje0_id,
-            'event_boekje1_id'  => $eventkamp_event_boekje1_id,
-            'event_boekje2_id'  => $eventkamp_event_boekje2_id,
-        );
-
-        wachthond($extdebug,3, 'ditevent_rollen_array', $ditevent_rollen_array);
-
-    }
-
-    // --- DEEL 1.2: GET CONTACT INFO HOOFDLEIDING ---
-    if ($ditevent_part_eventid > 0) {
-
-        wachthond($extdebug,2, "########################################################################");
-        wachthond($extdebug,1, "### CORE 1.2 GET CONTACT INFO HOOFDLEIDING VAN DIT EVENT","[EID: $eventkamp_event_id]");
+        wachthond($extdebug,3, "########################################################################");
+        wachthond($extdebug,2, "array_partditevent",                                  $array_partditevent);
         wachthond($extdebug,3, "########################################################################");
 
-        wachthond($extdebug,2, 'eventkamp_hoofdleid1_id',         $eventkamp_event_hldn1_id);
-        wachthond($extdebug,2, 'eventkamp_hoofdleid2_id',         $eventkamp_event_hldn2_id);
-        wachthond($extdebug,2, 'eventkamp_hoofdleid3_id',         $eventkamp_event_hldn3_id);
+        $contact_id                         = $array_partditevent['contact_id']                     ?? NULL;
+        $ditevent_displayname               = $array_partditevent['displayname']                    ?? NULL;
 
-        if ($eventkamp_event_hldn1_id > 0) {
-            $hldn1_info_array = base_find_hldn_info($eventkamp_event_hldn1_id);
-            wachthond($extdebug,2, "hldn1_info_array",  $hldn1_info_array);
-            $event_hoofdleiding1_displname = $hldn1_info_array['event_hoofdleiding_displname']  ?? NULL;
-            $event_hoofdleiding1_firstname = $hldn1_info_array['event_hoofdleiding_firstname']  ?? NULL;
-            $event_hoofdleiding1_image     = $hldn1_info_array['event_hoofdleiding_image']      ?? NULL;
-            $event_hoofdleiding1_image_bn  = $hldn1_info_array['event_hoofdleiding_image_bn']   ?? NULL;
-            $event_hoofdleiding1_phone     = $hldn1_info_array['event_hoofdleiding_phone']      ?? NULL;
-            $event_hoofdleiding1_dontphone = $hldn1_info_array['event_hoofdleiding_dontphone']  ?? NULL;
+        $ditevent_part_contact_id           = $array_partditevent['contact_id']                     ?? NULL;
+        $ditevent_part_eventid              = $array_partditevent['event_id']                       ?? NULL;
+        $ditevent_part_id                   = $array_partditevent['id']                             ?? NULL;
+        $ditevent_part_role_id              = $array_partditevent['role_id']                        ?? NULL;
+        $ditevent_part_status_id            = $array_partditevent['status_id']                      ?? NULL;
+        $ditevent_part_status_name          = $array_partditevent['status_name']                    ?? NULL;
+
+        $ditevent_eventid                   = $array_partditevent['part_event_id']                  ?? NULL;
+        $ditevent_event_title               = $array_partditevent['event_title']                    ?? NULL;
+        $ditevent_event_type_id             = $array_partditevent['event_type_id']                  ?? NULL;
+        $ditevent_event_type_label          = $array_partditevent['event_type_label']               ?? NULL;
+
+        $ditevent_register_date             = $array_partditevent['register_date']                  ?? NULL;
+        $ditevent_event_start               = $array_partditevent['event_start_date']               ?? NULL;
+        $ditevent_event_einde               = $array_partditevent['event_end_date']                 ?? NULL;
+        $ditevent_kampjaar                  = $array_partditevent['part_kampjaar']                  ?? NULL;
+
+        $ditevent_event_kampnaam            = $array_partditevent['kenmerken_kampnaam']             ?? NULL;
+        $ditevent_event_kampkort            = $array_partditevent['kenmerken_kampkort']             ?? NULL;
+        $ditevent_event_kampkort_low        = $array_partditevent['kenmerken_kampkort_low']         ?? NULL;
+        $ditevent_event_kampkort_cap        = $array_partditevent['kenmerken_kampkort_cap']         ?? NULL;
+
+        $ditevent_event_kamptype            = $array_partditevent['kenmerken_kamptype_naam']        ?? NULL;
+        $ditevent_event_kamptype_naam       = $array_partditevent['kenmerken_kamptype_naam']        ?? NULL;
+        $ditevent_event_kamptype_label      = $array_partditevent['kenmerken_kamptype_label']       ?? NULL;
+        $ditevent_event_kamptype_id         = $array_partditevent['kenmerken_kamptype_id']          ?? NULL;
+        $ditevent_event_kampsoort           = $array_partditevent['kenmerken_kampsoort']            ?? NULL;
+
+        $ditevent_part_kampnaam             = $array_partditevent['part_kampnaam']                  ?? NULL;
+        $ditevent_part_kampkort             = $array_partditevent['part_kampkort']                  ?? NULL;
+        $ditevent_part_kampkort_low         = $array_partditevent['part_kampkort_low']              ?? NULL;
+        $ditevent_part_kampkort_cap         = $array_partditevent['part_kampkort_cap']              ?? NULL;
+
+        $ditevent_part_kamptype_id          = $array_partditevent['part_kamptype_id']               ?? NULL;
+        $ditevent_part_functie              = $array_partditevent['part_functie']                   ?? NULL;
+        $ditevent_part_rol                  = $array_partditevent['part_rol']                       ?? NULL;
+        $ditevent_leid_welkkamp             = $array_partditevent['part_leid_kamp']                 ?? NULL;
+        $ditevent_leid_functie              = $array_partditevent['part_leid_functie']              ?? NULL;
+
+        $ditevent_event_brengen_van         = $array_partditevent['event_brengen_van']              ?? NULL;
+        $ditevent_event_brengen_tot         = $array_partditevent['event_brengen_tot']              ?? NULL;
+        $ditevent_event_pres_van            = $array_partditevent['event_pres_van']                 ?? NULL;
+        $ditevent_event_pres_tot            = $array_partditevent['event_pres_tot']                 ?? NULL;
+        $ditevent_event_halen_van           = $array_partditevent['event_halen_van']                ?? NULL;
+        $ditevent_event_halen_tot           = $array_partditevent['event_halen_tot']                ?? NULL;
+
+        $ditevent_event_thema_naam          = $array_partditevent['event_thema_naam']               ?? NULL;
+        $ditevent_event_thema_info          = $array_partditevent['event_thema_info']               ?? NULL;
+        $ditevent_event_goeddoel_naam       = $array_partditevent['event_goeddoel_naam']            ?? NULL;
+        $ditevent_event_goeddoel_info       = $array_partditevent['event_goeddoel_info']            ?? NULL;
+        $ditevent_event_goeddoel_link       = $array_partditevent['event_goeddoel_link']            ?? NULL;
+
+        $ditevent_part_1stdeel              = $array_partditevent['part_1stdeel']                   ?? NULL;
+        $ditevent_part_1stleid              = $array_partditevent['part_1stleid']                   ?? NULL;
+
+        $ditevent_part_nawgecheckt          = $array_partditevent['part_nawgecheckt']               ?? NULL;
+        $ditevent_part_biogecheckt          = $array_partditevent['part_biogecheckt']               ?? NULL;
+
+        $org_ditpart_nawgecheckt            = $ditevent_part_nawgecheckt;
+        $new_ditpart_nawgecheckt            = $ditevent_part_nawgecheckt;
+
+        $org_ditpart_biogecheckt            = $ditevent_part_biogecheckt;
+        $new_ditpart_biogecheckt            = $ditevent_part_biogecheckt;
+
+        $ditevent_part_groepklas            = $array_partditevent['part_groepklas']             ?? NULL;
+        $ditevent_part_voorkeur             = $array_partditevent['part_voorkeur']              ?? NULL;
+        $ditevent_part_groepsletter         = $array_partditevent['part_groepsletter']          ?? NULL;
+        $ditevent_part_groepskleur          = $array_partditevent['part_groepskleur']           ?? NULL;
+        $ditevent_part_groepsnaam           = $array_partditevent['part_groepsnaam']            ?? NULL;
+        $ditevent_part_slaapzaal            = $array_partditevent['part_slaapzaal']             ?? NULL;
+
+        $ditevent_wachtlijst_erop           = $array_partditevent['part_wachtlijst_erop']       ?? NULL;
+        $ditevent_wachtlijst_eraf           = $array_partditevent['part_wachtlijst_eraf']       ?? NULL;
+        $ditevent_criteriacheck_start       = $array_partditevent['part_criteriacheck_start']   ?? NULL;
+        $ditevent_criteriacheck_einde       = $array_partditevent['part_criteriacheck_einde']   ?? NULL;
+
+        $ditevent_criteria_indicatie        = $array_partditevent['part_criteria_indicatie']    ?? NULL;
+        $ditevent_criteria_oordeel          = $array_partditevent['part_criteria_oordeel']      ?? NULL;
+
+        $new_ditevent_criteria_indicatie    = $ditevent_criteria_indicatie;
+        $new_ditevent_criteria_oordeel      = $ditevent_criteria_oordeel; 
+
+        $ditevent_part_notificatie_deel     = $array_partditevent['part_notificatie_deel']      ?? NULL;
+        $ditevent_part_notificatie_leid     = $array_partditevent['part_notificatie_leid']      ?? NULL;
+        $ditevent_part_notificatie_kamp     = $array_partditevent['part_notificatie_kamp']      ?? NULL;
+        $ditevent_part_notificatie_staf     = $array_partditevent['part_notificatie_staf']      ?? NULL;
+        $ditevent_part_notificatie_priv     = $array_partditevent['part_notificatie_priv']      ?? NULL;
+
+        $ditevent_part_kampgeld_contribid   = $array_partditevent['part_kampgeld_contribid']    ?? NULL;
+        $ditevent_part_kampgeld_regeling    = $array_partditevent['part_kampgeld_regeling']     ?? NULL;
+        $ditevent_part_kampgeld_fietshuur   = $array_partditevent['part_kampgeld_fietshuur']    ?? NULL;
+        $ditevent_event_fietsevent          = $array_partditevent['event_fietsevent']           ?? NULL;
+
+        $ditevent_part_evaluatie_datum      = $array_partditevent['part_evaluatie_datum']       ?? NULL;
+
+        if (in_array($ditevent_event_type_id, $eventtypesleidall)) {
+            $ditevent_part_vogverzocht      = $array_partditevent['part_vogverzocht']           ?? NULL;
+            $ditevent_part_vogingediend     = $array_partditevent['part_vogingediend']          ?? NULL;
+            $ditevent_part_vogontvangst     = $array_partditevent['part_vogontvangst']          ?? NULL;
+            $ditevent_part_vogdatum         = $array_partditevent['part_vogdatum']              ?? NULL;
+            $ditevent_part_vogkenmerk       = $array_partditevent['part_vogkenmerk']            ?? NULL;
         }
 
-        if ($eventkamp_event_hldn2_id > 0) {
-            $hldn2_info_array = base_find_hldn_info($eventkamp_event_hldn2_id);
-            wachthond($extdebug,2, "hldn2_info_array",  $hldn2_info_array);
-            $event_hoofdleiding2_displname = $hldn2_info_array['event_hoofdleiding_displname']  ?? NULL;
-            $event_hoofdleiding2_firstname = $hldn2_info_array['event_hoofdleiding_firstname']  ?? NULL;
-            $event_hoofdleiding2_image     = $hldn2_info_array['event_hoofdleiding_image']      ?? NULL;
-            $event_hoofdleiding2_image_bn  = $hldn2_info_array['event_hoofdleiding_image_bn']   ?? NULL;
-            $event_hoofdleiding2_phone     = $hldn2_info_array['event_hoofdleiding_phone']      ?? NULL;
-            $event_hoofdleiding2_dontphone = $hldn2_info_array['event_hoofdleiding_dontphone']  ?? NULL;
+        if ($ditevent_part_eventid > 0) {
+
+            wachthond($extdebug,2, "########################################################################");
+            wachthond($extdebug,1, "### CORE 1.1 GET EVENT INFO BASED ON EVENTID", "[EID: $ditevent_part_eventid / PID: $ditevent_part_id]");
+            wachthond($extdebug,3, "########################################################################");
+
+            $array_eventinfo_ditevent = base_eid2event($ditevent_part_eventid, $ditevent_part_id);
+
+            wachthond($extdebug,4, "########################################################################");
+            wachthond($extdebug,3, "array_eventinfo_ditevent",                     $array_eventinfo_ditevent);
+            wachthond($extdebug,4, "########################################################################");
+
+            $eventkamp_event_id             = $array_eventinfo_ditevent['eventkamp_event_id']           ?? NULL;
+            $eventkamp_event_type_id        = $array_eventinfo_ditevent['eventkamp_event_type_id']      ?? NULL;
+            $eventkamp_event_type_id_label  = $array_eventinfo_ditevent['eventkamp_event_type_id_label']?? NULL; 
+
+            $eventkamp_kamptype_naam        = $array_eventinfo_ditevent['eventkamp_kamptype_naam']      ?? NULL;
+            $eventkamp_kamptype_label       = $array_eventinfo_ditevent['eventkamp_kamptype_label']     ?? NULL;
+            $eventkamp_kamptype_id          = $array_eventinfo_ditevent['eventkamp_kamptype_id']        ?? NULL;
+            $eventkamp_kampsoort            = $array_eventinfo_ditevent['eventkamp_kampsoort']          ?? NULL;
+
+            $eventkamp_kampnaam             = $array_eventinfo_ditevent['eventkamp_kampnaam']           ?? NULL;
+            $eventkamp_kampkort             = $array_eventinfo_ditevent['eventkamp_kampkort']           ?? NULL;
+            $eventkamp_kampkort_low         = $array_eventinfo_ditevent['eventkamp_kampkort_low']       ?? NULL;
+            $eventkamp_kampkort_cap         = $array_eventinfo_ditevent['eventkamp_kampkort_cap']       ?? NULL;
+
+            $eventkamp_event_start          = $array_eventinfo_ditevent['eventkamp_event_start']        ?? NULL;
+            $eventkamp_event_einde          = $array_eventinfo_ditevent['eventkamp_event_einde']        ?? NULL;
+            $eventkamp_event_weeknr         = $array_eventinfo_ditevent['eventkamp_event_weeknr']       ?? NULL;
+
+            $eventkamp_fiscalyear_start     = $array_eventinfo_ditevent['eventkamp_fiscalyear_start']   ?? NULL;
+            $eventkamp_fiscalyear_einde     = $array_eventinfo_ditevent['eventkamp_fiscalyear_einde']   ?? NULL;
+            $eventkamp_kampjaar             = $array_eventinfo_ditevent['eventkamp_kampjaar']           ?? NULL;
+            $eventkamp_kampjaarkort         = $array_eventinfo_ditevent['eventkamp_kampjaarkort']       ?? NULL;
+
+            $eventkamp_plek                 = $array_eventinfo_ditevent['eventkamp_plek']               ?? NULL;
+            $eventkamp_stad                 = $array_eventinfo_ditevent['eventkamp_stad']               ?? NULL;
+            $eventkamp_pleklang             = $array_eventinfo_ditevent['eventkamp_pleklang']           ?? NULL;
+            $eventkamp_stadlang             = $array_eventinfo_ditevent['eventkamp_stadlang']           ?? NULL;
+
+            $eventkamp_brengen_van          = $array_eventinfo_ditevent['eventkamp_brengen_van']        ?? NULL;
+            $eventkamp_brengen_tot          = $array_eventinfo_ditevent['eventkamp_brengen_tot']        ?? NULL;
+            $eventkamp_pres_van             = $array_eventinfo_ditevent['eventkamp_pres_van']           ?? NULL;
+            $eventkamp_pres_tot             = $array_eventinfo_ditevent['eventkamp_pres_tot']           ?? NULL;
+            $eventkamp_halen_van            = $array_eventinfo_ditevent['eventkamp_halen_van']          ?? NULL;
+            $eventkamp_halen_tot            = $array_eventinfo_ditevent['eventkamp_halen_tot']          ?? NULL;
+
+            $eventkamp_thema_naam           = $array_eventinfo_ditevent['eventkamp_thema_naam']         ?? NULL;
+            $eventkamp_thema_info           = $array_eventinfo_ditevent['eventkamp_thema_info']         ?? NULL;
+            $eventkamp_goeddoel_naam        = $array_eventinfo_ditevent['eventkamp_goeddoel_naam']      ?? NULL;
+            $eventkamp_goeddoel_info        = $array_eventinfo_ditevent['eventkamp_goeddoel_info']      ?? NULL;
+            $eventkamp_goeddoel_link        = $array_eventinfo_ditevent['eventkamp_goeddoel_link']      ?? NULL;
+
+            $eventkamp_welkomvideo          = $array_eventinfo_ditevent['eventkamp_welkomvideo']        ?? NULL;
+            $eventkamp_slotvideo            = $array_eventinfo_ditevent['eventkamp_slotvideo']          ?? NULL;
+            $eventkamp_extrabagage          = $array_eventinfo_ditevent['eventkamp_extrabagage']        ?? NULL;
+            $eventkamp_playlist             = $array_eventinfo_ditevent['eventkamp_playlist']           ?? NULL;
+            $eventkamp_doc_link             = $array_eventinfo_ditevent['eventkamp_doc_link']           ?? NULL;
+            $eventkamp_doc_info             = $array_eventinfo_ditevent['eventkamp_doc_info']           ?? NULL;
+            $eventkamp_foto_vraag           = $array_eventinfo_ditevent['eventkamp_foto_vraag']         ?? NULL;
+            $eventkamp_foto_album           = $array_eventinfo_ditevent['eventkamp_foto_album']         ?? NULL;
+        
+            $eventkamp_event_hldn1_id       = $array_eventinfo_ditevent['event_hldn1_id']               ?? NULL;
+            $eventkamp_event_hldn2_id       = $array_eventinfo_ditevent['event_hldn2_id']               ?? NULL;
+            $eventkamp_event_hldn3_id       = $array_eventinfo_ditevent['event_hldn3_id']               ?? NULL;
+
+            $eventkamp_event_kern1_id       = $array_eventinfo_ditevent['event_kern1_id']               ?? NULL;
+            $eventkamp_event_kern2_id       = $array_eventinfo_ditevent['event_kern2_id']               ?? NULL;
+            $eventkamp_event_kern3_id       = $array_eventinfo_ditevent['event_kern3_id']               ?? NULL;
+
+            $eventkamp_event_gedrag0_id     = $array_eventinfo_ditevent['event_gedrag0_id']             ?? NULL;
+            $eventkamp_event_gedrag1_id     = $array_eventinfo_ditevent['event_gedrag1_id']             ?? NULL;
+            $eventkamp_event_gedrag2_id     = $array_eventinfo_ditevent['event_gedrag2_id']             ?? NULL;
+
+            $eventkamp_event_keuken0_id     = $array_eventinfo_ditevent['event_keuken0_id']             ?? NULL;
+            $eventkamp_event_keuken1_id     = $array_eventinfo_ditevent['event_keuken1_id']             ?? NULL;
+            $eventkamp_event_keuken2_id     = $array_eventinfo_ditevent['event_keuken2_id']             ?? NULL;
+            $eventkamp_event_keuken3_id     = $array_eventinfo_ditevent['event_keuken3_id']             ?? NULL;
+
+            $eventkamp_event_boekje0_id     = $array_eventinfo_ditevent['event_boekje0_id']             ?? NULL;
+            $eventkamp_event_boekje1_id     = $array_eventinfo_ditevent['event_boekje1_id']             ?? NULL;
+            $eventkamp_event_boekje2_id     = $array_eventinfo_ditevent['event_boekje2_id']             ?? NULL;
+
+            // --- 2. BOUW DE ROLLEN ARRAY VOOR ACL ---
+            // Deze array geven we door aan de ACL module.
+            $ditevent_rollen_array = array(
+                'event_hldn1_id'    => $eventkamp_event_hldn1_id,
+                'event_hldn2_id'    => $eventkamp_event_hldn2_id,
+                'event_hldn3_id'    => $eventkamp_event_hldn3_id,
+
+                'event_kern1_id'    => $eventkamp_event_kern1_id,
+                'event_kern2_id'    => $eventkamp_event_kern2_id,
+                'event_kern3_id'    => $eventkamp_event_kern3_id,
+
+                'event_gedrag0_id'  => $eventkamp_event_gedrag0_id,
+                'event_gedrag1_id'  => $eventkamp_event_gedrag1_id,
+                'event_gedrag2_id'  => $eventkamp_event_gedrag2_id,
+
+                'event_keuken0_id'  => $eventkamp_event_keuken0_id,
+                'event_keuken1_id'  => $eventkamp_event_keuken1_id,
+                'event_keuken2_id'  => $eventkamp_event_keuken2_id,
+                'event_keuken3_id'  => $eventkamp_event_keuken3_id,
+
+                'event_boekje0_id'  => $eventkamp_event_boekje0_id,
+                'event_boekje1_id'  => $eventkamp_event_boekje1_id,
+                'event_boekje2_id'  => $eventkamp_event_boekje2_id,
+            );
+
+            wachthond($extdebug,3, 'ditevent_rollen_array', $ditevent_rollen_array);
+
         }
 
-        if ($eventkamp_event_hldn3_id > 0) {
-            $hldn3_info_array = base_find_hldn_info($eventkamp_event_hldn3_id);
-            wachthond($extdebug,2, "hldn3_info_array",  $hldn3_info_array);
-            $event_hoofdleiding3_displname = $hldn3_info_array['event_hoofdleiding_displname']  ?? NULL;
-            $event_hoofdleiding3_firstname = $hldn3_info_array['event_hoofdleiding_firstname']  ?? NULL;
-            $event_hoofdleiding3_image     = $hldn3_info_array['event_hoofdleiding_image']      ?? NULL;
-            $event_hoofdleiding3_image_bn  = $hldn3_info_array['event_hoofdleiding_image_bn']   ?? NULL;
-            $event_hoofdleiding3_phone     = $hldn3_info_array['event_hoofdleiding_phone']      ?? NULL;
-            $event_hoofdleiding3_dontphone = $hldn3_info_array['event_hoofdleiding_dontphone']  ?? NULL;
+        // --- DEEL 1.2: GET CONTACT INFO HOOFDLEIDING ---
+        if ($ditevent_part_eventid > 0) {
+
+            wachthond($extdebug,2, "########################################################################");
+            wachthond($extdebug,1, "### CORE 1.2 GET CONTACT INFO HOOFDLEIDING VAN DIT EVENT","[EID: $eventkamp_event_id]");
+            wachthond($extdebug,3, "########################################################################");
+
+            wachthond($extdebug,2, 'eventkamp_hoofdleid1_id',         $eventkamp_event_hldn1_id);
+            wachthond($extdebug,2, 'eventkamp_hoofdleid2_id',         $eventkamp_event_hldn2_id);
+            wachthond($extdebug,2, 'eventkamp_hoofdleid3_id',         $eventkamp_event_hldn3_id);
+
+            if ($eventkamp_event_hldn1_id > 0) {
+                $hldn1_info_array = base_find_hldn_info($eventkamp_event_hldn1_id);
+                wachthond($extdebug,2, "hldn1_info_array",  $hldn1_info_array);
+                $event_hoofdleiding1_displname = $hldn1_info_array['event_hoofdleiding_displname']  ?? NULL;
+                $event_hoofdleiding1_firstname = $hldn1_info_array['event_hoofdleiding_firstname']  ?? NULL;
+                $event_hoofdleiding1_image     = $hldn1_info_array['event_hoofdleiding_image']      ?? NULL;
+                $event_hoofdleiding1_image_bn  = $hldn1_info_array['event_hoofdleiding_image_bn']   ?? NULL;
+                $event_hoofdleiding1_phone     = $hldn1_info_array['event_hoofdleiding_phone']      ?? NULL;
+                $event_hoofdleiding1_dontphone = $hldn1_info_array['event_hoofdleiding_dontphone']  ?? NULL;
+            }
+
+            if ($eventkamp_event_hldn2_id > 0) {
+                $hldn2_info_array = base_find_hldn_info($eventkamp_event_hldn2_id);
+                wachthond($extdebug,2, "hldn2_info_array",  $hldn2_info_array);
+                $event_hoofdleiding2_displname = $hldn2_info_array['event_hoofdleiding_displname']  ?? NULL;
+                $event_hoofdleiding2_firstname = $hldn2_info_array['event_hoofdleiding_firstname']  ?? NULL;
+                $event_hoofdleiding2_image     = $hldn2_info_array['event_hoofdleiding_image']      ?? NULL;
+                $event_hoofdleiding2_image_bn  = $hldn2_info_array['event_hoofdleiding_image_bn']   ?? NULL;
+                $event_hoofdleiding2_phone     = $hldn2_info_array['event_hoofdleiding_phone']      ?? NULL;
+                $event_hoofdleiding2_dontphone = $hldn2_info_array['event_hoofdleiding_dontphone']  ?? NULL;
+            }
+
+            if ($eventkamp_event_hldn3_id > 0) {
+                $hldn3_info_array = base_find_hldn_info($eventkamp_event_hldn3_id);
+                wachthond($extdebug,2, "hldn3_info_array",  $hldn3_info_array);
+                $event_hoofdleiding3_displname = $hldn3_info_array['event_hoofdleiding_displname']  ?? NULL;
+                $event_hoofdleiding3_firstname = $hldn3_info_array['event_hoofdleiding_firstname']  ?? NULL;
+                $event_hoofdleiding3_image     = $hldn3_info_array['event_hoofdleiding_image']      ?? NULL;
+                $event_hoofdleiding3_image_bn  = $hldn3_info_array['event_hoofdleiding_image_bn']   ?? NULL;
+                $event_hoofdleiding3_phone     = $hldn3_info_array['event_hoofdleiding_phone']      ?? NULL;
+                $event_hoofdleiding3_dontphone = $hldn3_info_array['event_hoofdleiding_dontphone']  ?? NULL;
+            }
         }
+
+        ########################################################################
+        # CORE 1.3 GET CONTACT INFO BASED ON CONTACTID
+        # We controleren expliciet op een numerieke ID om TypeErrors in PHP 8+ te voorkomen.
+        # base_cid2cont verwacht strikt een integer.
+        ########################################################################
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE 1.3 GET CONTACT INFO BASED ON CONTACTID", "[CID: " . ($contact_id ?? 'NULL') . "]");
+        wachthond($extdebug, 3, "########################################################################");
+
+        // Initialiseer variabelen om 'undefined' notices te voorkomen
+        $array_contditjaar = NULL;
+
+        if (!empty($contact_id) && is_numeric($contact_id)) {
+            
+            watchdog('civicrm_timing', core_microtimer("START cid2cont"), NULL, WATCHDOG_DEBUG);
+            
+            // Voer de conversie uit van CID naar uitgebreide contact array
+            $array_contditjaar = base_cid2cont((int) $contact_id);
+            
+            wachthond($extdebug, 3, "array_contditjaar", $array_contditjaar);
+            watchdog('civicrm_timing', core_microtimer("EINDE cid2cont"), NULL, WATCHDOG_DEBUG);
+            
+        } else {
+            // Loggen dat we de aanroep overslaan omdat de ID ontbreekt (bijv. bij nieuwe, nog niet opgeslagen contacten)
+            wachthond($extdebug, 1, "SKIPPED: base_cid2cont overgeslagen want contact_id is leeg.", "[CORE-SKIP]");
+        }
+
+        $contact_foto               = $array_contditjaar['contact_foto']            ?? NULL;
+        $birth_date                 = $array_contditjaar['birth_date']              ?? NULL;
+        $geslacht                   = $array_contditjaar['gender']                  ?? NULL;
+        $first_name                 = $array_contditjaar['first_name']              ?? NULL;
+        $middle_name                = $array_contditjaar['middle_name']             ?? NULL;
+        $last_name                  = $array_contditjaar['last_name']               ?? NULL;    
+        $nick_name                  = $array_contditjaar['nick_name']               ?? NULL;
+        $displayname                = $array_contditjaar['displayname']             ?? NULL;
+        $crm_drupalnaam             = $array_contditjaar['crm_drupalnaam']          ?? NULL;    // drupal username
+        $crm_externalid             = $array_contditjaar['crm_externalid']          ?? NULL;    // drupal cmsid
+
+        $laatste_keer               = $array_contditjaar['laatstekeer']             ?? NULL;    // M61: tbv berekenen jaar 'mee komend jaar'       
+        $curcv_deel_array           = $array_contditjaar['curcv_deel_array']        ?? NULL;    // welke jaren deel
+        $curcv_leid_array           = $array_contditjaar['curcv_leid_array']        ?? NULL;    // welke jaren leid 
+        $oldcv_deel_array           = $array_contditjaar['oldcv_deel_array']        ?? NULL;    // welke jaren deel OUD
+        $oldcv_leid_array           = $array_contditjaar['oldcv_leid_array']        ?? NULL;    // welke jaren leid OUD
+        $curcv_keer_deel            = $array_contditjaar['curcv_keer_deel']         ?? NULL;    // keren deel
+        $curcv_keer_leid            = $array_contditjaar['curcv_keer_leid']         ?? NULL;    // keren leid
+
+        $datum_belangstelling       = $array_contditjaar['datum_belangstelling']    ?? NULL;
+        $intakegesprekdatum         = $array_contditjaar['intakegesprekdatum']      ?? NULL;
+        $intakegesprekpersoon       = $array_contditjaar['intakegesprekpersoon']    ?? NULL;
+
+        $werving_mee_komendkamp     = $array_contditjaar['werving_mee_komendkamp']  ?? NULL;
+        $werving_mee_verwachting    = $array_contditjaar['werving_mee_verwachting'] ?? NULL;
+        $werving_mee_toelichting    = $array_contditjaar['werving_mee_toelichting'] ?? NULL;
+        $werving_mee_update         = $array_contditjaar['werving_mee_update']      ?? NULL;
+        $werving_mee_update_year    = $array_contditjaar['werving_mee_update_year'] ?? NULL;
+        $werving_mee_notities       = $array_contditjaar['werving_mee_notities']    ?? NULL;
+        $werving_vakantieregio      = $array_contditjaar['werving_vakantieregio']   ?? NULL;   
+
+        $cont_fotstatus             = $array_contditjaar['cont_fotstatus']          ?? NULL;
+        $cont_fotupdate             = $array_contditjaar['cont_fotupdate']          ?? NULL;
+
+        $ditjaar_nawgecheckt        = $array_contditjaar['cont_nawgecheckt']        ?? NULL;
+        $ditjaar_bioingevuld        = $array_contditjaar['cont_bioingevuld']        ?? NULL;
+        $ditjaar_biogecheckt        = $array_contditjaar['cont_biogecheckt']        ?? NULL;
+
+        $ditjaar_nawstatus          = $array_contditjaar['cont_nawstatus']          ?? NULL;
+        $ditjaar_biostatus          = $array_contditjaar['cont_biostatus']          ?? NULL;
+
+        $org_ditjaar_nawgecheckt    = $ditjaar_nawgecheckt;
+        $new_ditjaar_nawgecheckt    = $ditjaar_nawgecheckt;
+        $org_ditjaar_biogecheckt    = $ditjaar_biogecheckt;
+        $new_ditjaar_biogecheckt    = $ditjaar_biogecheckt;
+
+        $org_ditjaar_nawstatus      = $ditjaar_nawstatus;
+        $new_ditjaar_nawstatus      = $ditjaar_nawstatus;
+        $org_ditjaar_biostatus      = $ditjaar_biostatus;
+        $new_ditjaar_biostatus      = $ditjaar_biostatus;
+
+        $privacy_voorkeuren         = $array_contditjaar['privacy_voorkeuren']      ?? NULL;  // bv. Verwijder contactgegevens
+        $privacy_geheimadres        = $array_contditjaar['privacy_geheimadres']     ?? NULL;  // bv. Ja / Nee
+        $privacy_beeldgebruik       = $array_contditjaar['privacy_beeldgebruik']    ?? NULL;  // Ik geef toestemming voor kampfotos
+
+        $cont_notificatie_deel      = $array_contditjaar['cont_notificatie_deel']   ?? NULL;
+        $cont_notificatie_leid      = $array_contditjaar['cont_notificatie_leid']   ?? NULL;
+        $cont_notificatie_kamp      = $array_contditjaar['cont_notificatie_kamp']   ?? NULL;
+        $cont_notificatie_staf      = $array_contditjaar['cont_notificatie_staf']   ?? NULL;
+
+        /*
+            $results = civicrm_api4('Note', 'create', [
+                'values' => [
+                  'entity_table' => 'civicrm_contact',        
+                  'entity_id' => 27,
+                'contact_id' => 1,          
+                  'note' => 'DIT IS EEN TEST',
+                  'subject' => 'testonderwerp',
+                  'note_date' => '2024-05-01',
+                  'privacy' => 2,
+                ],
+                'checkPermissions' => TRUE,
+            ]);
+        */
+
+        /*
+            wachthond($extdebug,3, 'entityID',                  $entityID);
+            wachthond($extdebug,3, 'contact_id',                $contact_id);
+            wachthond($extdebug,3, 'birth_date',                $birth_date);
+            wachthond($extdebug,3, 'first_name',                $first_name);
+            wachthond($extdebug,3, 'middle_name',               $middle_name);
+            wachthond($extdebug,3, 'last_name',                 $last_name);
+            wachthond($extdebug,3, 'nick_name',                 $nick_name);
+            wachthond($extdebug,2, 'displayname',               $displayname);
+            wachthond($extdebug,3, 'crm_drupalnaam',            $crm_drupalnaam);
+            wachthond($extdebug,3, 'crm_externalid',            $crm_externalid);
+
+            wachthond($extdebug,3, 'laatstekeer',               $laatste_keer);
+            wachthond($extdebug,3, 'curcv_deel_array',          $curcv_deel_array);
+            wachthond($extdebug,3, 'curcv_leid_array',          $curcv_leid_array);
+            wachthond($extdebug,3, 'curcv_keer_deel',           $curcv_keer_deel);
+            wachthond($extdebug,3, 'curcv_keer_leid',           $curcv_keer_leid);
+
+            wachthond($extdebug,3, 'datum_belangstelling',      $datum_belangstelling);
+            wachthond($extdebug,3, 'intakegesprekdatum',        $intakegesprekdatum);
+            wachthond($extdebug,3, 'intakegesprekpersoon',      $intakegesprekpersoon);         
+
+            wachthond($extdebug,3, 'werving_mee_komendkamp',    $werving_mee_komendkamp);
+            wachthond($extdebug,3, 'werving_mee_verwachting',   $werving_mee_verwachting);
+            wachthond($extdebug,3, 'werving_mee_toelichting',   $werving_mee_toelichting);
+            wachthond($extdebug,3, 'werving_mee_update',        $werving_mee_update);
+            wachthond($extdebug,3, 'werving_mee_update_year',   $werving_mee_update_year);
+            wachthond($extdebug,3, 'werving_mee_notities',      $werving_mee_notities);
+
+            wachthond($extdebug,3, 'ditjaar_nawgecheckt',       $ditjaar_nawgecheckt);
+            wachthond($extdebug,3, 'ditjaar_bioingevuld',       $ditjaar_bioingevuld);
+            wachthond($extdebug,3, 'ditjaar_biogecheckt',       $ditjaar_biogecheckt);
+            wachthond($extdebug,3, 'org_ditjaar_nawgecheckt',   $org_ditjaar_nawgecheckt);
+        //  wachthond($extdebug,3, 'org_ditpart_nawgecheckt',   $org_ditpart_nawgecheckt);
+            wachthond($extdebug,3, 'new_ditjaar_nawgecheckt',   $new_ditjaar_nawgecheckt);
+        //  wachthond($extdebug,3, 'new_ditpart_nawgecheckt',   $new_ditpart_nawgecheckt);
+
+            wachthond($extdebug,3, 'privacy_voorkeuren',        $privacy_voorkeuren);
+            wachthond($extdebug,3, 'privacy_geheimadres',       $privacy_geheimadres);
+            wachthond($extdebug,3, 'privacy_beeldgebruik',      $privacy_beeldgebruik);
+
+            wachthond($extdebug,3, 'cont_notificatie_deel',     $cont_notificatie_deel);
+            wachthond($extdebug,3, 'cont_notificatie_leid',     $cont_notificatie_leid);
+            wachthond($extdebug,3, 'cont_notificatie_kamp',     $cont_notificatie_kamp);
+            wachthond($extdebug,3, 'cont_notificatie_staf',     $cont_notificatie_staf);
+        */
     }
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,1, "### CORE 1.3 GET CONTACT INFO BASED ON CONTACTID",        "[CID: $contact_id]");
-    wachthond($extdebug,3, "########################################################################");
-
-    watchdog('civicrm_timing', core_microtimer("START cid2cont"), NULL, WATCHDOG_DEBUG);
-    $array_contditjaar = base_cid2cont($contact_id);
-    wachthond($extdebug,3, "array_contditjaar", $array_contditjaar);
-    watchdog('civicrm_timing', core_microtimer("EINDE cid2cont"), NULL, WATCHDOG_DEBUG);
-
-    $contact_foto               = $array_contditjaar['contact_foto']            ?? NULL;
-    $birth_date                 = $array_contditjaar['birth_date']              ?? NULL;
-    $geslacht                   = $array_contditjaar['gender']                  ?? NULL;
-    $first_name                 = $array_contditjaar['first_name']              ?? NULL;
-    $middle_name                = $array_contditjaar['middle_name']             ?? NULL;
-    $last_name                  = $array_contditjaar['last_name']               ?? NULL;    
-    $nick_name                  = $array_contditjaar['nick_name']               ?? NULL;
-    $displayname                = $array_contditjaar['displayname']             ?? NULL;
-    $crm_drupalnaam             = $array_contditjaar['crm_drupalnaam']          ?? NULL;    // drupal username
-    $crm_externalid             = $array_contditjaar['crm_externalid']          ?? NULL;    // drupal cmsid
-
-    $laatste_keer               = $array_contditjaar['laatstekeer']             ?? NULL;    // M61: tbv berekenen jaar 'mee komend jaar'       
-    $curcv_deel_array           = $array_contditjaar['curcv_deel_array']        ?? NULL;    // welke jaren deel
-    $curcv_leid_array           = $array_contditjaar['curcv_leid_array']        ?? NULL;    // welke jaren leid 
-    $oldcv_deel_array           = $array_contditjaar['oldcv_deel_array']        ?? NULL;    // welke jaren deel OUD
-    $oldcv_leid_array           = $array_contditjaar['oldcv_leid_array']        ?? NULL;    // welke jaren leid OUD
-    $curcv_keer_deel            = $array_contditjaar['curcv_keer_deel']         ?? NULL;    // keren deel
-    $curcv_keer_leid            = $array_contditjaar['curcv_keer_leid']         ?? NULL;    // keren leid
-
-    $datum_belangstelling       = $array_contditjaar['datum_belangstelling']    ?? NULL;
-    $intakegesprekdatum         = $array_contditjaar['intakegesprekdatum']      ?? NULL;
-    $intakegesprekpersoon       = $array_contditjaar['intakegesprekpersoon']    ?? NULL;
-
-    $werving_mee_komendkamp     = $array_contditjaar['werving_mee_komendkamp']  ?? NULL;
-    $werving_mee_verwachting    = $array_contditjaar['werving_mee_verwachting'] ?? NULL;
-    $werving_mee_toelichting    = $array_contditjaar['werving_mee_toelichting'] ?? NULL;
-    $werving_mee_update         = $array_contditjaar['werving_mee_update']      ?? NULL;
-    $werving_mee_update_year    = $array_contditjaar['werving_mee_update_year'] ?? NULL;
-    $werving_mee_notities       = $array_contditjaar['werving_mee_notities']    ?? NULL;
-    $werving_vakantieregio      = $array_contditjaar['werving_vakantieregio']   ?? NULL;   
-
-    $cont_fotstatus             = $array_contditjaar['cont_fotstatus']          ?? NULL;
-    $cont_fotupdate             = $array_contditjaar['cont_fotupdate']          ?? NULL;
-
-    $ditjaar_nawgecheckt        = $array_contditjaar['cont_nawgecheckt']        ?? NULL;
-    $ditjaar_bioingevuld        = $array_contditjaar['cont_bioingevuld']        ?? NULL;
-    $ditjaar_biogecheckt        = $array_contditjaar['cont_biogecheckt']        ?? NULL;
-
-    $ditjaar_nawstatus          = $array_contditjaar['cont_nawstatus']          ?? NULL;
-    $ditjaar_biostatus          = $array_contditjaar['cont_biostatus']          ?? NULL;
-
-    $org_ditjaar_nawgecheckt    = $ditjaar_nawgecheckt;
-    $new_ditjaar_nawgecheckt    = $ditjaar_nawgecheckt;
-    $org_ditjaar_biogecheckt    = $ditjaar_biogecheckt;
-    $new_ditjaar_biogecheckt    = $ditjaar_biogecheckt;
-
-    $org_ditjaar_nawstatus      = $ditjaar_nawstatus;
-    $new_ditjaar_nawstatus      = $ditjaar_nawstatus;
-    $org_ditjaar_biostatus      = $ditjaar_biostatus;
-    $new_ditjaar_biostatus      = $ditjaar_biostatus;
-
-    $privacy_voorkeuren         = $array_contditjaar['privacy_voorkeuren']      ?? NULL;  // bv. Verwijder contactgegevens
-    $privacy_geheimadres        = $array_contditjaar['privacy_geheimadres']     ?? NULL;  // bv. Ja / Nee
-    $privacy_beeldgebruik       = $array_contditjaar['privacy_beeldgebruik']    ?? NULL;  // Ik geef toestemming voor kampfotos
-
-    $cont_notificatie_deel      = $array_contditjaar['cont_notificatie_deel']   ?? NULL;
-    $cont_notificatie_leid      = $array_contditjaar['cont_notificatie_leid']   ?? NULL;
-    $cont_notificatie_kamp      = $array_contditjaar['cont_notificatie_kamp']   ?? NULL;
-    $cont_notificatie_staf      = $array_contditjaar['cont_notificatie_staf']   ?? NULL;
-
-/*
-    $results = civicrm_api4('Note', 'create', [
-        'values' => [
-          'entity_table' => 'civicrm_contact',        
-          'entity_id' => 27,
-        'contact_id' => 1,          
-          'note' => 'DIT IS EEN TEST',
-          'subject' => 'testonderwerp',
-          'note_date' => '2024-05-01',
-          'privacy' => 2,
-        ],
-        'checkPermissions' => TRUE,
-    ]);
-*/
-
-/*
-    wachthond($extdebug,3, 'entityID',                  $entityID);
-    wachthond($extdebug,3, 'contact_id',                $contact_id);
-    wachthond($extdebug,3, 'birth_date',                $birth_date);
-    wachthond($extdebug,3, 'first_name',                $first_name);
-    wachthond($extdebug,3, 'middle_name',               $middle_name);
-    wachthond($extdebug,3, 'last_name',                 $last_name);
-    wachthond($extdebug,3, 'nick_name',                 $nick_name);
-    wachthond($extdebug,2, 'displayname',               $displayname);
-    wachthond($extdebug,3, 'crm_drupalnaam',            $crm_drupalnaam);
-    wachthond($extdebug,3, 'crm_externalid',            $crm_externalid);
-
-    wachthond($extdebug,3, 'laatstekeer',               $laatste_keer);
-    wachthond($extdebug,3, 'curcv_deel_array',          $curcv_deel_array);
-    wachthond($extdebug,3, 'curcv_leid_array',          $curcv_leid_array);
-    wachthond($extdebug,3, 'curcv_keer_deel',           $curcv_keer_deel);
-    wachthond($extdebug,3, 'curcv_keer_leid',           $curcv_keer_leid);
-
-    wachthond($extdebug,3, 'datum_belangstelling',      $datum_belangstelling);
-    wachthond($extdebug,3, 'intakegesprekdatum',        $intakegesprekdatum);
-    wachthond($extdebug,3, 'intakegesprekpersoon',      $intakegesprekpersoon);         
-
-    wachthond($extdebug,3, 'werving_mee_komendkamp',    $werving_mee_komendkamp);
-    wachthond($extdebug,3, 'werving_mee_verwachting',   $werving_mee_verwachting);
-    wachthond($extdebug,3, 'werving_mee_toelichting',   $werving_mee_toelichting);
-    wachthond($extdebug,3, 'werving_mee_update',        $werving_mee_update);
-    wachthond($extdebug,3, 'werving_mee_update_year',   $werving_mee_update_year);
-    wachthond($extdebug,3, 'werving_mee_notities',      $werving_mee_notities);
-
-    wachthond($extdebug,3, 'ditjaar_nawgecheckt',       $ditjaar_nawgecheckt);
-    wachthond($extdebug,3, 'ditjaar_bioingevuld',       $ditjaar_bioingevuld);
-    wachthond($extdebug,3, 'ditjaar_biogecheckt',       $ditjaar_biogecheckt);
-    wachthond($extdebug,3, 'org_ditjaar_nawgecheckt',   $org_ditjaar_nawgecheckt);
-//  wachthond($extdebug,3, 'org_ditpart_nawgecheckt',   $org_ditpart_nawgecheckt);
-    wachthond($extdebug,3, 'new_ditjaar_nawgecheckt',   $new_ditjaar_nawgecheckt);
-//  wachthond($extdebug,3, 'new_ditpart_nawgecheckt',   $new_ditpart_nawgecheckt);
-
-    wachthond($extdebug,3, 'privacy_voorkeuren',        $privacy_voorkeuren);
-    wachthond($extdebug,3, 'privacy_geheimadres',       $privacy_geheimadres);
-    wachthond($extdebug,3, 'privacy_beeldgebruik',      $privacy_beeldgebruik);
-
-    wachthond($extdebug,3, 'cont_notificatie_deel',     $cont_notificatie_deel);
-    wachthond($extdebug,3, 'cont_notificatie_leid',     $cont_notificatie_leid);
-    wachthond($extdebug,3, 'cont_notificatie_kamp',     $cont_notificatie_kamp);
-    wachthond($extdebug,3, 'cont_notificatie_staf',     $cont_notificatie_staf);
-*/
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 1.4 BEPAAL HET CONTACT ID",             "[EntityID: $entityID]");
     wachthond($extdebug,3, "########################################################################");
