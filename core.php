@@ -65,7 +65,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         drupal_timestamp_sweep($params);
     }
 
-    $extdebug   = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug   = 0;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug   = FALSE;
 
     $extcv      = 1;  //  KAMP CV
@@ -2847,16 +2847,6 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 5.5 SAVE CORRECT PARTICIPANT ROLE ID", "[$displayname $ditevent_part_functie $ditevent_event_kampkort]");
     wachthond($extdebug,2, "########################################################################");
-
-    # $arrayint         = array_intersect($ditevent_part_role_id, array("6", "9"));
-    # $arrayintcount    = count(array_intersect($ditevent_part_role_id, array("6", "9")));
-    # if ($extdebug >= 2) { watchdog('php','<pre>arrayint: '.print_r($arrayint,TRUE).'</pre>',NULL,WATCHDOG_DEBUG);       }
-    # if ($extdebug >= 2) { watchdog('php','<pre>arrayintcount: '.print_r($arrayintcount,TRUE).'</pre>',NULL,WATCHDOG_DEBUG);}
-
-    # if ((count(array_intersect($ditevent_part_role_id, array("6", "9"))) > 0 ) OR in_array($ditevent_part_role_id, array("6", "9"))) {
-        // ROLE_ID = LEIDING OF LEIDING TOPKAMP
-        # M61: HIERBOVEN COMPLEXE MANIER OM twee arrrays te intersecten maar ook om te gaan als ditevent_part_role_id geen array is
-    # }
 
     wachthond($extdebug,4, 'part_eventtypeid',      $ditevent_event_type_id);
 
