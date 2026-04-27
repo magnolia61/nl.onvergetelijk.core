@@ -2,7 +2,7 @@
 <extension key="nl.onvergetelijk.core" type="module">
   <file>core</file>
   <name>Onvergetelijk - Core</name>
-  <description>Notificaties bij significante wijzigingen in deelnemerinformatie</description>
+  <description>Motor die de overige modules aanroept bij bewerken van een contact/deelnemer</description>
   <license>AGPL-3.0</license>
   <maintainer>
     <author>Richard van Oosterhout</author>
