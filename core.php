@@ -1,18 +1,20 @@
 <?php
 
-// === FUNCTIE-INDEX ===
-// Bestand: core.php
-// Functies in dit bestand:
-//   core_civicrm_postCommit()
-//   core_civicrm_post()        In de Core module: Trigger Pecunia en Detecteer Status 0
-//   core_civicrm_custom()
-//   core_civicrm_xmlMenu()
-//   core_civicrm_install()     Implementation of hook_civicrm_install
-//   core_civicrm_uninstall()   Implementation of hook_civicrm_uninstall
-//   core_civicrm_enable()      Implementation of hook_civicrm_enable
-//   core_civicrm_disable()     Implementation of hook_civicrm_disable
-//   core_civicrm_managed()
-// === EINDE FUNCTIE-INDEX ===
+/**
+ * =======================================================================================
+ * FUNCTIE-INDEX: core.php
+ * =======================================================================================
+ *   core_civicrm_postCommit()
+ *   core_civicrm_post()        In de Core module: Trigger Pecunia en Detecteer Status 0
+ *   core_civicrm_custom()
+ *   core_civicrm_xmlMenu()
+ *   core_civicrm_install()     Implementation of hook_civicrm_install
+ *   core_civicrm_uninstall()   Implementation of hook_civicrm_uninstall
+ *   core_civicrm_enable()      Implementation of hook_civicrm_enable
+ *   core_civicrm_disable()     Implementation of hook_civicrm_disable
+ *   core_civicrm_managed()
+ * =======================================================================================
+ */
 
 #error_reporting(E_ALL);
 #ini_set('display_errors',TRUE);
