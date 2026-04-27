@@ -801,7 +801,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug,2, "########################################################################");
 
     watchdog('civicrm_timing', base_microtimer("START allpart"), NULL, WATCHDOG_DEBUG);
-    $array_allpart_ditjaar              = base_find_allpart($contact_id, $today_datetime);
+    $array_allpart_ditjaar              = base_find_allpart($contact_id, $today_datetime) ?: [];
     watchdog('civicrm_timing', base_microtimer("EINDE allpart"), NULL, WATCHDOG_DEBUG);
 
     wachthond($extdebug,4, "########################################################################");
@@ -918,7 +918,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
                                 "$ditjaar_one_leid_part_id ($ditjaar_one_leid_kampkort $ditjaar_refyear)");
     }        
 
-    $array_allpart_eventjaar            = base_find_allpart($contact_id, $ditevent_event_start);
+    $array_allpart_eventjaar            = base_find_allpart($contact_id, $ditevent_event_start) ?: [];
 
     wachthond($extdebug,1, "########################################################################");
     wachthond($extdebug,2, "array_allpart_eventjaar",                        $array_allpart_eventjaar);
