@@ -42,7 +42,7 @@ function core_civicrm_postCommit($op, $objectName, $objectId, &$objectRef) {
 
     if ($objectName == 'Participant' && $op == 'create') {
         
-        $extdebug = 0;
+        $extdebug = 'core.dispatcher'; // Kanaal voor centrale debug-config; niveau wordt opgezocht in ozk.debug.config.php
 
         wachthond($extdebug,3, "########################################################################");
         wachthond($extdebug,1, "### POSTCOMMIT: Triggering custom logic for NEW Participant: $objectId");
@@ -63,37 +63,6 @@ function core_civicrm_postCommit($op, $objectName, $objectId, &$objectRef) {
 }
 
 */
-
-/**
- * In de Core module: Trigger Pecunia en Detecteer Status 0
- */
-function core_civicrm_post($op, $objectName, $objectId, &$objectRef) {
-    
-    // We reageren alleen op deelnemers die worden aangemaakt of gewijzigd
-    if ($objectName === 'Participant' && in_array($op, array('create', 'edit'))) {
-        
-        $extdebug = 0;
-
-        wachthond($extdebug, 2, "########################################################################");
-        wachthond($extdebug, 1, "### CORE -> POST HOOK: TRIGGER DEELNEMER CHECK",                "[START]");
-        wachthond($extdebug, 2, "########################################################################");
-
-         // --------------------------------------------------------------------------------------
-        // 2. PECUNIA ORKESTRATOR (Bestaande logica)
-        // --------------------------------------------------------------------------------------
-        /**
-         * De Core-module delegeert nu alles naar de Pecunia orkestrator.
-         * Deze functie regelt de data-verzameling, status-bepaling en opslag.
-         */
-        if (function_exists('pecunia_civicrm_participant')) {
-//          pecunia_civicrm_participant($objectId);
-        }
-
-        wachthond($extdebug, 2, "########################################################################");
-        wachthond($extdebug, 1, "### CORE -> POST HOOK: VOLTOOID",                              "[FINISH]");
-        wachthond($extdebug, 2, "########################################################################");
-    }
-}
 
 function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
@@ -126,7 +95,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         drupal_timestamp_sweep($params);
     }
 
-    $extdebug   = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug = 'core.configure'; // Kanaal voor centrale debug-config; niveau wordt opgezocht in ozk.debug.config.php
     $apidebug   = FALSE;
 
     $extcv      = 1;  //  KAMP CV
@@ -148,33 +117,67 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     $regpast    = 1;  //  REG PAST EVENTS
     $extwrite   = 1;
 
-    $profilecont        = array(225); // JAAROVERZICHT
-    $profilepartgeld    = array(281);
-    $profilepartdeel    = array(139);
-    $profilepartleid    = array(190);
-    $profilepartref     = array(213);
-    $profilepartvog     = array(140);
-    $profilepart        = array_merge($profilepartdeel, $profilepartleid);
+    // ==============================================================================
+    // 1. CONFIGURATIE & PROFIELEN (Via gecentraliseerde helper)
+    // ==============================================================================
+    $cg = get_custom_group_ids();
 
-//  $profilepartintake    = array_merge($profilepartref,  $profilepartvog);
-    $profilepartintake  = $profilepartvog;
+    // Mapping naar de vertrouwde 'legacy' namen in core.php
+    $profilecont        = $cg['cont'];
+    $profilepartgeld    = $cg['partgeld'];
+    $profilepartdeel    = $cg['partdeel'];
+    $profilepartleid    = $cg['partleid'];
+    $profilepartref     = $cg['partref'];
+    $profilepartvog     = $cg['partvog'];
+    $profilepart        = $cg['part'];          // = partdeel + partleid
+    $profileparttrain   = $cg['parttrain'];     // = part_trainingsdag
+    
+    $profilepartintake  = $cg['partintake'];    // = partvog (of partvog + partref)
+    $profilecontmax     = $cg['contmax'];       // = cont
+    $profilepartmax     = $cg['partmax'];       // = part + partintake
+    $profilepartleidmax = $cg['partleidmax'];   // = partleid + partintake
+    $profilecv          = $cg['cv'];            // = cont + part
+    $profilecvmax       = $cg['cvmax'];         // = contmax + partmax
 
-    $profilecontmax     = array_merge($profilecont);
-    $profilepartmax     = array_merge($profilepart,     $profilepartintake);
-    $profilepartleidmax = array_merge($profilepartleid, $profilepartintake);
-    $profilecv          = array_merge($profilecont,     $profilepart);
-    $profilecvmax       = array_merge($profilecontmax,  $profilepartmax);
+    // ==============================================================================
+    // 2. SCOPE CHECK (Alleen Onvergetelijk profielen)
+    // ==============================================================================
 
-    if (in_array($groupID, $profilepartref)) { // PROFILE LEID PART REF
-        return;
-    }
+    if (in_array($groupID, $profilepartref))    { return;   }
+    if (in_array($groupID, $profilepartvog))    { return;   }
+    if (in_array($groupID, $profileparttrain))  { return;   }
 
-    if (in_array($groupID, $profilepartvog)) { // PROFILE LEID PART VOG
-        return;
-    }
+    if (!in_array($groupID, $profilecvmax))     { return;   }
 
-    if (!in_array($groupID, $profilecvmax)) {
-        return;
+    // ==============================================================================
+    // 3. SNELLE EXIT: WHITELIST VOOR DEELNEMER & LEIDING EVENTS
+    // ==============================================================================
+    // We checken alleen als de opgeslagen velden horen bij een Participant-profiel (zoals Groep 205 of 190)
+    if (in_array($groupID, $profilepartmax)) {
+        try {
+            // Haal snel het event_type_id op van de huidige inschrijving
+            $check_event = civicrm_api4('Participant', 'get', [
+                'checkPermissions'  => FALSE,
+                'select'            => ['event_id.event_type_id'],
+                'where'             => [['id', '=', $entityID]],
+            ])->first();
+
+            $huidig_event_type = $check_event['event_id.event_type_id'] ?? 0;
+            $eventtypes        = get_event_types();
+            
+            // Bouw de whitelist van toegestane event types (Deel All + Leid All)
+            $whitelist_types   = array_merge($eventtypes['deel_all'], $eventtypes['leid_all']);
+
+            // Stop de executie als het event type NIET in de whitelist staat
+            if (!in_array($huidig_event_type, $whitelist_types)) {
+//              wachthond($extdebug, 1, "CORE CUSTOM EXIT", "Event Type $huidig_event_type is geen Deel- of Leid-event. Gestopt.");
+                return;
+            }
+        } catch (\Exception $e) { 
+            // Silent failsafe: mocht de API call falen, stopt de code hier voor de zekerheid.
+            // Als je liever hebt dat hij dan toch doorgaat, kun je de return weghalen.
+            return; 
+        }
     }
 
 // IF CVMAX 120
@@ -464,6 +467,30 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         $ditevent_leid_welkkamp             = $array_partditevent['part_leid_kamp']                 ?? NULL;
         $ditevent_leid_functie              = $array_partditevent['part_leid_functie']              ?? NULL;
 
+        // ==============================================================================
+        // OVERRIDE: Logica voor Bestuur en Kampstaf (Hardcode kampkort en locatie)
+        // ==============================================================================
+        if ($ditevent_part_functie == 'bestuurslid' || $ditevent_leid_functie == 'bestuurslid' || strtoupper($ditevent_leid_welkkamp) == 'BESTUUR') {
+            $ditevent_part_kampkort     = 'bst';
+            $ditevent_leid_welkkamp     = 'bst';
+            $ditevent_part_kampkort_cap = 'BST';
+            $ditevent_part_kampkort_low = 'bst';
+            $ditevent_part_rol          = 'bestuur'; 
+            $ditevent_part_functie      = 'bestuurslid';
+            
+            wachthond($extdebug, 2, "OVERRIDE UITGEVOERD", "Kampkort overschreven naar 'bst'");
+
+        } elseif ($ditevent_part_functie == 'kampstaf' || $ditevent_leid_functie == 'kampstaf' || strtoupper($ditevent_leid_welkkamp) == 'KAMPSTAF') {
+            $ditevent_part_kampkort     = 'kst';
+            $ditevent_leid_welkkamp     = 'kst';
+            $ditevent_part_kampkort_cap = 'KST';
+            $ditevent_part_kampkort_low = 'kst';
+            $ditevent_part_rol          = 'kampstaf'; 
+            $ditevent_part_functie      = 'kampstaf';
+            
+            wachthond($extdebug, 2, "OVERRIDE UITGEVOERD", "Kampkort overschreven naar 'kst'");
+        }
+
         $ditevent_part_kampgeld_contribid   = $array_partditevent['part_kampgeld_contribid']        ?? NULL;
         $ditevent_part_kampgeld_regeling    = $array_partditevent['part_kampgeld_regeling']         ?? NULL;
         $ditevent_part_kampgeld_fietshuur   = $array_partditevent['part_kampgeld_fietshuur']        ?? NULL;
@@ -533,6 +560,21 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
             $eventkamp_kampkort             = $array_eventinfo_ditevent['eventkamp_kampkort']           ?? NULL;
             $eventkamp_kampkort_low         = $array_eventinfo_ditevent['eventkamp_kampkort_low']       ?? NULL;
             $eventkamp_kampkort_cap         = $array_eventinfo_ditevent['eventkamp_kampkort_cap']       ?? NULL;
+
+            // ==============================================================================
+            // OVERRIDE: Forceer Event Data voor Bestuur en Kampstaf (tbv DB Save in Sectie 8)
+            // ==============================================================================
+            if ($ditevent_part_rol == 'bestuur') {
+                $eventkamp_kampkort = 'bst';
+                $eventkamp_kampnaam = 'Bestuur';
+                $eventkamp_pleklang = 'N.v.t.';
+                $eventkamp_stadlang = 'N.v.t.';
+            } elseif ($ditevent_part_rol == 'kampstaf') {
+                $eventkamp_kampkort = 'kst';
+                $eventkamp_kampnaam = 'Kampstaf';
+                $eventkamp_pleklang = 'N.v.t.';
+                $eventkamp_stadlang = 'N.v.t.';
+            }
 
             $eventkamp_event_start          = $array_eventinfo_ditevent['eventkamp_event_start']        ?? NULL;
             $eventkamp_event_einde          = $array_eventinfo_ditevent['eventkamp_event_einde']        ?? NULL;
@@ -1130,6 +1172,26 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         $ditjaar_leid_welkkamp          = $array_partditjaar['part_leid_kamp']              ?? NULL;
         $ditjaar_leid_functie           = $array_partditjaar['part_leid_functie']           ?? NULL;
 
+        // ==============================================================================
+        // OVERRIDE DITJAAR: Logica voor Bestuur en Kampstaf
+        // ==============================================================================
+        if ($ditjaar_part_functie == 'bestuurslid' || $ditjaar_leid_functie == 'bestuurslid' || strtoupper($ditjaar_leid_welkkamp) == 'BESTUUR') {
+            $ditjaar_part_kampkort      = 'bst';
+            $ditjaar_leid_welkkamp      = 'bst';
+            $ditjaar_part_rol           = 'bestuur'; 
+            $ditjaar_part_functie       = 'bestuurslid';
+            
+            wachthond($extdebug, 2, "OVERRIDE UITGEVOERD (DITJAAR)", "Kampkort overschreven naar 'bst'");
+
+        } elseif ($ditjaar_part_functie == 'kampstaf' || $ditjaar_leid_functie == 'kampstaf' || strtoupper($ditjaar_leid_welkkamp) == 'KAMPSTAF') {
+            $ditjaar_part_kampkort      = 'kst';
+            $ditjaar_leid_welkkamp      = 'kst';
+            $ditjaar_part_rol           = 'kampstaf'; 
+            $ditjaar_part_functie       = 'kampstaf';
+            
+            wachthond($extdebug, 2, "OVERRIDE UITGEVOERD (DITJAAR)", "Kampkort overschreven naar 'kst'");
+        }
+
         $ditjaar_part_vakantieregio     = $array_partditjaar['part_vakantieregio']          ?? NULL;
 
         $ditjaar_part_1stdeel           = $array_partditjaar['part_1stdeel']                ?? NULL;
@@ -1194,6 +1256,21 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
         $ditjaar_event_kampnaam         = $array_eventinfo_ditjaar['eventkamp_kampnaam']            ?? NULL;
         $ditjaar_event_kampkort         = $array_eventinfo_ditjaar['eventkamp_kampkort']            ?? NULL;
+
+        // ==============================================================================
+        // OVERRIDE: Forceer Event Data voor Bestuur en Kampstaf (tbv DB Save in Sectie 8)
+        // ==============================================================================
+        if ($ditjaar_part_rol == 'bestuur') {
+            $ditjaar_event_kampkort = 'bst';
+            $ditjaar_event_kampnaam = 'Bestuur';
+            $ditjaar_event_pleklang = 'N.v.t.';
+            $ditjaar_event_stadlang = 'N.v.t.';
+        } elseif ($ditjaar_part_rol == 'kampstaf') {
+            $ditjaar_event_kampkort = 'kst';
+            $ditjaar_event_kampnaam = 'Kampstaf';
+            $ditjaar_event_pleklang = 'N.v.t.';
+            $ditjaar_event_stadlang = 'N.v.t.';
+        }
 
         $ditjaar_event_start            = $array_eventinfo_ditjaar['eventkamp_event_start']         ?? NULL;
         $ditjaar_event_einde            = $array_eventinfo_ditjaar['eventkamp_event_einde']         ?? NULL;
@@ -1536,6 +1613,31 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     if ($extchk == 1 AND in_array($groupID, $profilecv)) {    // PROFILE CONT + PART (BASIC)
     ##########################################################################################
 
+        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug,1, "### CORE 4.1 CORE SYNC NAAR TRAININGSDAG","[groupID: $groupID] [op: $op]");
+        wachthond($extdebug,2, "########################################################################");
+
+        // Gebruik de APIv4 resultaten van de 'Positieve Leiding' check
+        if ($ditjaar_pos_leid_event_type_id > 0 && in_array($ditjaar_pos_leid_event_type_id, $eventtypesleidall)) {
+
+            $sync_data = [
+                'displayname' => $displayname,
+                'kampkort'    => $ditjaar_pos_leid_kampkort,    // Direct uit de pos_leid resultaten
+                'kampnaam'    => $ditjaar_event_kampnaam,
+                'event_start' => $ditjaar_event_start,
+                'event_einde' => $ditjaar_event_einde,
+                'pleklang'    => $ditjaar_event_pleklang,
+                'stadlang'    => $ditjaar_event_stadlang,
+                'kampjaar'    => $ditjaar_event_kampjaar,
+                'functie'     => $ditjaar_pos_leid_kampfunctie, // Direct uit de pos_leid resultaten[cite: 1]
+                'welkkamp'    => $ditjaar_leid_welkkamp,
+            ];
+
+            if (function_exists('partstatus_sync_trainingsdag_volledig')) {
+                partstatus_sync_trainingsdag_volledig($contact_id, $today_kampjaar, $sync_data);
+            }
+        }
+
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 4.1 CONSTRUCT (DRUPAL) USERNAME","[groupID: $groupID] [op: $op]");
     wachthond($extdebug,2, "########################################################################");
@@ -1683,329 +1785,20 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug,1, "vakantieregio",       $vakantieregio);
 
     wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,1, "### CORE 4.9 A RETREIVE RELATIONSHIPS OF THIS CONTACT", "[groupID: $groupID] [op: $op]");
+    wachthond($extdebug,1, "### CORE 4.9 STGAVE CONFIGURE",                         "[groupID: $groupID] [op: $op]");
     wachthond($extdebug,2, "########################################################################");
 
-    watchdog('civicrm_timing', base_microtimer("START configure REL/GAVE"), NULL, WATCHDOG_DEBUG);
-
-    if (in_array($groupID, $profilepart)) {     // PROFILE PART
-
-        if (empty($related_gavecontact_relid)) {
-
-            wachthond($extdebug,1, "### CORE 4.8 0 A RETRIEVE RELATED GAVECONTACT ###", "[groupID: $groupID] [op: $op]");
-
-            $params_get_rel_gavecontact = [
-              'checkPermissions' => FALSE,
-              'debug' => $apidebug,
-                'select' => [
-                'row_count', 'contact_id_a', 'contact_id_b', 'is_active', 'start_date', 'end_date', 'id',
-                ],
-                'where' => [
-                    ['contact_id_a',    '=',  $contact_id],
-                    ['relationship_type_id','=',  20],
-    #               ['start_date',        '>=', $ditevent_fiscalyear_start],
-    #               ['end_date',          '<=', $eventkamp_fiscalyear_einde],
-                    ['is_active',         '=',  TRUE],
-                ],
-            ];
-
-            wachthond($extdebug,7, 'params_get_rel_gavecontact',        $params_get_rel_gavecontact);
-            $result_get_rel_gavecontact = civicrm_api4('Relationship', 'get',   $params_get_rel_gavecontact);
-            wachthond($extdebug,9, 'result_get_rel_gavecontact',        $result_get_rel_gavecontact);
-
-            $result_get_rel_gavecontact_count = $result_get_rel_gavecontact->countMatched();
-            if ($result_get_rel_gavecontact_count == 1) {
-                $related_gavecontact_id     = $result_get_rel_gavecontact[0]['contact_id_b']  ?? NULL;
-                $related_gavecontact_relid    = $result_get_rel_gavecontact[0]['id']      ?? NULL;
-                wachthond($extdebug,1,  "PRIMA: =1 RELATED ACTIEVE GAVECONTACT GEVONDEN",
-                                        "result_get_rel_gavecontact_count: $result_get_rel_gavecontact_count");
-            } elseif ($result_get_rel_gavecontact_count >= 1) {
-                wachthond($extdebug,1,  "ERROR: >1 RELATED ACTIEVE GAVECONTACT GEVONDEN",
-                                        "result_get_rel_gavecontact_count: $result_get_rel_gavecontact_count");
-            } else {
-                $related_gavecontact_id     = NULL;
-                $related_gavecontact_relid    = NULL;
-
-                wachthond($extdebug,1,  "ERROR: =0 RELATED ACTIEVE GAVECONTACT GEVONDEN", 
-                                        "result_get_rel_gavecontact_count: $result_get_rel_gavecontact_count");
-            }
-            wachthond($extdebug,3, 'related_gavecontact_id',        $related_gavecontact_id);
-            wachthond($extdebug,3, 'related_gavecontact_relid',     $related_gavecontact_relid);
-        }
-    }
-
-    ##########################################################################################
-    // GET PHONE VAN GAVECONTACT
-    ##########################################################################################
-
-    $params_gave_contact = [
-      'checkPermissions' => FALSE,
-      'debug'  => $apidebug,        
-      'select' => [
-        'display_name', 'first_name', 'image_URL',
-      ],
-      'where' => [
-          ['id',        'IN', [$related_gavecontact_id]],
-      ],
-    ];
-    $params_gave_phone = [
-      'checkPermissions' => FALSE,
-      'debug'  => $apidebug,        
-      'select' => [
-        'phone',
-      ],
-      'where' => [
-        ['contact_id',      'IN', [$related_gavecontact_id]],
-        ['location_type_id',  '=', 1],
-        ['phone_type_id',     '=', 2],
-      ],
-    ];
-    $params_gave_email = [
-      'checkPermissions' => FALSE,
-      'debug'  => $apidebug,
-      'select' => [
-        'email',
-      ],
-      'where' => [
-        ['contact_id',      'IN', [$related_gavecontact_id]],
-        ['location_type_id',  '=', 1],
-      ],
-    ];
-    wachthond($extdebug,7, 'params_gave_contact',           $params_gave_contact);
-    wachthond($extdebug,7, 'params_gave_phone',             $params_gave_phone);
-    wachthond($extdebug,7, 'params_gave_email',             $params_gave_email);
-    $result_gave_contact  = civicrm_api4('Contact','get',   $params_gave_contact);
-    $result_gave_phone    = civicrm_api4('Phone',  'get',   $params_gave_phone);
-    $result_gave_email    = civicrm_api4('Email',  'get',   $params_gave_email);
-    wachthond($extdebug,9, 'result_gave_contact',           $result_gave_contact);
-    wachthond($extdebug,9, 'result_gave_phone',             $result_gave_phone);
-    wachthond($extdebug,9, 'result_gave_email',             $result_gave_email);
-
-    if (isset($result_gave_contact))  {
-      $gave_contact_naam    = $result_gave_contact[0]['display_name']     ?? NULL;
-      $gave_contact_foto    = $result_gave_contact[0]['image_URL']      ?? NULL;
-      wachthond($extdebug,2, 'gave_contact_naam',     $gave_contact_naam);
-      wachthond($extdebug,2, 'gave_contact_foto',     $gave_contact_foto);
+    // Gave-logica verplaatst naar nl.onvergetelijk.stgave (stgave_civicrm_configure).
+    // Dit omvat: relatie type 20 ophalen, telefoon/email sync → locatietype Gave (26),
+    // line items 175/-55/-120, en regeling 'ja_stgave'.
+    watchdog('civicrm_timing', base_microtimer("START configure REL/GAVE (stgave ext)"), NULL, WATCHDOG_DEBUG);
+    if (function_exists('stgave_civicrm_configure')) {
+        $result_stgave = stgave_civicrm_configure($contact_id, $array_partditjaar ?? []);
+        wachthond($extdebug, 3, 'result_stgave',                 $result_stgave);
     } else {
-      $gave_contact_naam    = "";
-      $gave_contact_foto    = "";
+        wachthond($extdebug, 1, "SKIP stgave_civicrm_configure: extensie niet actief", "[CID: $contact_id]");
     }
-
-    if (isset($result_gave_phone))  {
-      $gave_contact_phone   = $result_gave_phone[0]['phone']    ?? NULL;
-      $new_phone_gave_phone   = $gave_contact_phone;
-      wachthond($extdebug,2, 'gave_contact_phone',    $gave_contact_phone);
-    } else {
-      $gave_contact_phone   = "";
-    }
-    if (isset($result_gave_email))  {
-      $gave_contact_email   = $result_gave_email[0]['email']    ?? NULL;
-      $new_email_gave_email   = $gave_contact_email;
-      wachthond($extdebug,2, 'gave_contact_email',    $gave_contact_email);
-    } else {
-      $gave_contact_email   = "";
-    }
-/*
-    $params_gave_email = [
-      'checkPermissions' => FALSE,
-      'debug'  => $apidebug,        
-        'select' => [
-        'email',
-        ],
-        'where' => [
-          ['contact_id',      'IN', [$related_gavecontact_id]],
-          ['location_type_id',  '=', 1],
-        ],
-    ];
-    wachthond($extdebug,7, 'params_gave_contact',     $params_gave_contact);
-    wachthond($extdebug,7, 'params_gave_email  ',       $params_gave_email);
-    $result_gave_contact  = civicrm_api4('Contact','get', $params_gave_contact);
-    $result_gave_email    = civicrm_api4('Phone',  'get', $params_gave_email);
-    wachthond($extdebug,9, 'result_gave_email',       $result_gave_email);
-
-    if (isset($related_gavecontact_id)) {
-      $gave_email      = $result_gave_email[0]['email'] ?? NULL;
-      wachthond($extdebug,2, 'gave_contact_email', $gave_contact_email);
-    } else {
-      $gavecontact_email  = "";
-    }
-*/
-    ##########################################################################################
-/*
-    $params_rel_gave_get = [
-      'checkPermissions' => FALSE,
-      'debug'  => $apidebug,
-      'select' => [
-          'row_count',          
-#         'email.email',
-#         'phone.phone',
-          'contact_id_b',
-          'contact_id_b.display_name',
-          'contact_id_b.image_URL',
-          'contact_id_b.phone_primary',
-          'contact_id_b.email_primary',
-      ],
-      'join' => [
-#         ['Phone AS phone', 'INNER' ],
-#         ['Email AS email', 'INNER' ],
-#         ['Phone AS phone', 'INNER', ['contact_id', '=', 'contact_id_b']],
-#         ['Email AS email', 'INNER', ['contact_id', '=', 'contact_id_b']],
-      ],
-        'where' => [
-        ['contact_id_a',      '=', $contact_id],          
-#         ['email.location_type_id',  '=', 1],
-#         ['phone.location_type_id',  '=', 1],
-        ['relationship_type_id',  '=', 20],         
-        ],
-    ];
-
-    wachthond($extdebug,3, 'params_rel_gave_get',        $params_rel_gave_get);
-    $result_rel_gave_get  = civicrm_api4('Relationship','get', $params_rel_gave_get);
-    wachthond($extdebug,3, 'result_rel_gave_get',          $result_rel_gave_get);
-
-    $rel_gave_rowcount  = $result_rel_gave_get[0]['row_count'] ?? NULL;
-    wachthond($extdebug,2, 'rel_gave_rowcount',  $rel_gave_rowcount);
-
-    if ($rel_gave_rowcount > 0) {
-      $rel_gave_phone   = $result_rel_gave_get[0]['phone.phone'] ?? NULL;
-      $rel_gave_email   = $result_rel_gave_get[0]['email.email'] ?? NULL;
-      wachthond($extdebug,2, 'rel_gave_phone', $rel_gave_phone);
-      wachthond($extdebug,2, 'rel_gave_email', $rel_gave_email);
-    } else {
-      $rel_gave_phone   = "";
-      $rel_gave_email   = "";
-    }
-*/
-
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,1, "### CORE 4.9 B CREATE EMAIL PHONE_GAVE", "[groupID: $groupID] [op: $op]");
-    wachthond($extdebug,2, "########################################################################");
-
-    ##########################################################################################
-    ### PHONE CHECK [GET GAVE PHONE]
-    ##########################################################################################
-
-    $params_phone_gave = [
-      'checkPermissions' => FALSE,
-      'debug'  => $apidebug,
-        'select' => [
-        'row_count', 'id', 'phone', 'contact_id.do_not_phone',
-        ],
-        'where' => [
-        ['contact_id',        '=',  $contact_id],
-        ['location_type_id:name',   '=',  "Gave"],
-#           ['location_type_id',    '=',  26],
-        ],
-    ];
-    wachthond($extdebug,7, 'params_phone_gave',         $params_phone_gave);
-    $result_phone_gave  = civicrm_api4('Phone','get',   $params_phone_gave);
-    wachthond($extdebug,9, 'result_phone_gave',         $result_phone_gave);
-
-        $result_phone_count = $result_phone_gave[0]['row_count']        ?? NULL;
-//      $result_phone_count = $result_phone->countMatched()             ?? NULL;
-
-        if ($result_phone_count == 1) {
-            $phone_gave_id        = $result_phone_gave[0]['id']                       ?? NULL;
-            $phone_gave_phone     = $result_phone_gave[0]['phone']                    ?? NULL;
-            $phone_gave_donot     = $result_phone_gave[0]['contact_id.do_not_phone']  ?? NULL;
-            wachthond($extdebug,2, 'phone_gave_id',           $phone_gave_id);
-            wachthond($extdebug,2, 'phone_gave_phone',        $phone_gave_phone);
-            wachthond($extdebug,2, 'phone_gave_donot',        $phone_gave_donot);
-        } else {
-            $phone_gave_id        = "";
-            $phone_gave_phone     = "";
-            $phone_gave_donot     = "";
-        }
-
-    ##########################################################################################
-    ### PHONE CHECK [PHONE GAVE AL IN ORDE]
-    ##########################################################################################
-
-    if ($phone_gave_id AND $phone_gave_id > 0) {
-
-      ### EMAIL IN ORDE
-      if ($phone_gave_phone == $new_phone_gave_phone) {
-          wachthond($extdebug,2, 'phone_gave al in orde',   $new_phone_gave_phone);
-      } else {
-
-        ### EMAIL DELETE
-        if ($phone_gave_phone != $part_notificatie_gave) {
-/*
-          $phone_phone_gave_delete = civicrm_api4('Phone', 'delete', [
-            'where' => [
-              ['id', '=', $phone_gave_id],
-            ],
-          ]);
-
-            wachthond($extdebug,2, 'phone_gave verwijderd', "$phone_gave_phone ($phone_gave_id)");
-          $phone_gave_removed = 1;
-*/
-        }
-      }
-      
-      ##########################################################################################
-      ### PHONE UPDATE
-      ##########################################################################################
-
-      if ($phone_gave_phone != $new_phone_gave_phone AND !empty($new_phone_gave_phone)) {
-        $params_phone_gave_update = [
-          'checkPermissions' => FALSE,
-          'debug' => $apidebug,
-          'where' => [
-            ['id',          '=', $phone_gave_id],
-            ['contact_id',      '=', $contact_id],
-          ],
-          'values' => [
-            'phone'          =>  $new_phone_gave_phone,
-            'location_type_id:name'  =>  "Gave",
-            'is_primary'       =>  TRUE,
-          ],
-        ];
-            wachthond($extdebug,7, 'params_phone_gave_update',        $params_phone_gave_update);
-        if ($extwrite == 1 AND $phone_gave_donot == FALSE) {
-            $result_phone_gave_update = civicrm_api4('Phone', 'update', $params_phone_gave_update);
-          }
-          wachthond($extdebug,9, 'result_phone_gave_update',        $result_phone_gave_update);
-        wachthond($extdebug,2, 'phone_gave geupdated',          $new_phone_gave_phone);
-      } else {
-          wachthond($extdebug,9, 'phone_gave_update',     "SKIPPED");         
-      }
-    } else {
-        wachthond($extdebug,9, 'phone_gave UPDATE',       "SKIPPED (geen phone_gave_id)");      
-    }
-
-    ##########################################################################################
-    ### PHONE CREATE
-    ##########################################################################################
-
-    if ((empty($phone_gave_id) AND !empty($new_phone_gave_phone)) OR $phone_gave_removed == 1) {
-      $params_phone_gave_create = [
-        'checkPermissions' => FALSE,
-        'debug'  => $apidebug,
-        'values' => [
-          'contact_id'       => $contact_id,
-          'phone'          => $new_phone_gave_phone,
-            'location_type_id:label' => 'Gave',
-            'phone_type_id:label'    => 'Mobiel',
-          'is_primary'       => TRUE,
-        ],
-      ];
-          wachthond($extdebug,7, 'params_phone_gave_create',        $params_phone_gave_create);
-      if ($extwrite == 1 AND !in_array($privacy_voorkeuren, array("33","44"))) {
-          $result_phone_gave_create = civicrm_api4('Phone', 'create', $params_phone_gave_create);
-        } else {
-          wachthond($extdebug,9, 'phone_gave_create',           "SKIPPED [ivm privacy]");
-        }
-        wachthond($extdebug,9, 'result_phone_gave_create',      $result_phone_gave_create);
-        wachthond($extdebug,2, 'phone_gave aangemaakt',           $new_phone_gave_phone);
-    } else {
-        wachthond($extdebug,9, 'phone_gave_create',             "SKIPPED");
-        wachthond($extdebug,9, 'phone_gave_id',                 $phone_gave_id);
-        wachthond($extdebug,9, 'new_phone_gave_phone',          $new_phone_gave_phone);
-        wachthond($extdebug,9, 'phone_gave_removed',            $phone_gave_removed);
-    }
-
-    watchdog('civicrm_timing', base_microtimer("EINDE configure REL/GAVE"), NULL, WATCHDOG_DEBUG);
+    watchdog('civicrm_timing', base_microtimer("EINDE configure REL/GAVE (stgave ext)"), NULL, WATCHDOG_DEBUG);
 
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 4.10 CONFIGURE AANDACHTSPUNTEN MEDISCH",              "MEDISCH]");
@@ -2025,17 +1818,25 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug,3, 'result_gedrag',                     $result_gedrag);
     watchdog('civicrm_timing', base_microtimer("EINDE configuratie GEDRAG"), NULL, WATCHDOG_DEBUG);
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,1, "### CORE 4.12 CONFIGURE FOT, NAW, BIO",                    "[FOT/NAW/BIO]");
-    wachthond($extdebug,2, "########################################################################");
+    wachthond($extdebug, 2, "########################################################################");
+    wachthond($extdebug, 1, "### CORE 4.12 CONFIGURE FOT, NAW, BIO", "[FOT/NAW/BIO]");
+    wachthond($extdebug, 2, "########################################################################");
 
-    wachthond($extdebug,3, 'array_contditjaar',     $array_contditjaar);
+    // 1. Foto en algemene data mag altijd (of bij bredere scope)
+    // Hier komt je bestaande code voor FOT/NAW/BIO verwerking...
 
-    watchdog('civicrm_timing', base_microtimer("START configuratie INTAKE"), NULL, WATCHDOG_DEBUG);
-    // FIX: Forceer lege arrays (?? []) als variabelen NULL of undefined zijn om TypeErrors te voorkomen!
-    $result_intake = intake_civicrm_configure($array_contditjaar ?? [], $array_partditjaar ?? [], $params);
-    wachthond($extdebug,3, 'result_intake',                     $result_intake);
-    watchdog('civicrm_timing', base_microtimer("EINDE configuratie INTAKE"), NULL, WATCHDOG_DEBUG);    
+    // 2. Alleen de ZWARE INTAKE aanroep conditioneel maken
+    if (in_array($groupID, $profilecontmax)) {
+        watchdog('civicrm_timing', base_microtimer("START configuratie INTAKE (Scope: Contact)"), NULL, WATCHDOG_DEBUG);
+        
+        $result_intake = intake_civicrm_configure($array_contditjaar ?? [], $array_partditjaar ?? [], $params);
+        
+        wachthond($extdebug, 3, 'result_intake', $result_intake);
+        watchdog('civicrm_timing', base_microtimer("EINDE configuratie INTAKE"), NULL, WATCHDOG_DEBUG);
+    } else {
+        // We loggen specifiek dat we alleen de INTAKE-rekenmachine overslaan
+        wachthond($extdebug, 1, "SKIP INTAKE REKENMACHINE: GroupID $groupID valt buiten PROFILE CV MAX. FOT/NAW wel verwerkt.");
+    }
 
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 4.13 ENSURE CUSTOM CONTACT FIELD TABLE ENTRIES",      "[ENSURE]");
