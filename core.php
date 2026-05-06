@@ -458,6 +458,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
         $ditevent_part_kampnaam             = $array_partditevent['part_kampnaam']                  ?? NULL;
         $ditevent_part_kampkort             = $array_partditevent['part_kampkort']                  ?? NULL;
+        $ditevent_part_kampsoort            = $array_partditevent['part_kampsoort']                 ?? NULL;
         $ditevent_part_kampkort_low         = $array_partditevent['part_kampkort_low']              ?? NULL;
         $ditevent_part_kampkort_cap         = $array_partditevent['part_kampkort_cap']              ?? NULL;
 
@@ -1165,6 +1166,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         $ditjaar_part_kampjaar          = $array_partditjaar['part_kampjaar']               ?? NULL;
         $ditjaar_part_kampnaam          = $array_partditjaar['part_kampnaam']               ?? NULL;
         $ditjaar_part_kampkort          = $array_partditjaar['part_kampkort']               ?? NULL;
+        $ditjaar_part_kampsoort         = $array_partditjaar['part_kampsoort']              ?? NULL;
 
         $ditjaar_part_kamptype_id       = $array_partditjaar['part_kamptype_id']            ?? NULL;
         $ditjaar_part_functie           = $array_partditjaar['part_functie']                ?? NULL;
@@ -1366,7 +1368,40 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
         wachthond($extdebug,3, 'ditjaar_rollen_array', $ditjaar_rollen_array);
 
+        // Gave-logica verplaatst naar nl.onvergetelijk.stgave (stgave_civicrm_configure).
+        // Dit omvat: relatie type 20 ophalen, telefoon/email sync → locatietype Gave (26),
+        // line items 175/-55/-120, en regeling 'ja_stgave'.
+        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug,1, "### CORE 4.9 STGAVE CONFIGURE",                     "[PID: $ditjaar_prim_partid]");
+        wachthond($extdebug,2, "########################################################################");
+
+        watchdog('civicrm_timing', base_microtimer("START configure REL/GAVE (stgave ext)"), NULL, WATCHDOG_DEBUG);
+        if (function_exists('stgave_civicrm_configure')) {
+            $result_stgave = stgave_civicrm_configure($contact_id, $array_partditjaar);
+            wachthond($extdebug, 3, 'result_stgave',                 $result_stgave);
+        } else {
+            wachthond($extdebug, 1, "SKIP stgave_civicrm_configure: extensie niet actief", "[CID: $contact_id]");
+        }
+        watchdog('civicrm_timing', base_microtimer("EINDE configure REL/GAVE (stgave ext)"), NULL, WATCHDOG_DEBUG);
+
     }
+
+    wachthond($extdebug,2, "########################################################################");
+    wachthond($extdebug,1, "### CORE 4.9b STGAVE CONFIGURE ALLE JAREN",             "[CID: $contact_id]");
+    wachthond($extdebug,2, "########################################################################");
+
+    watchdog('civicrm_timing', base_microtimer("START stgave alle jaren"), NULL, WATCHDOG_DEBUG);
+    if (function_exists('stgave_civicrm_configure')) {
+        // Trigger stgave ALTIJD, niet alleen voor ditjaar. De detectielogica in stgave
+        // bepaalt zelf of dit een St.Gave contact is (rol 16, regeling ja_stgave, of line items).
+        // Dit zorgt dat ook historische St.Gave deelnemers kunnen worden hersteld.
+        $part_array_alle = base_pid2part($entityID);
+        $result_stgave_alle = stgave_civicrm_configure($contact_id, $part_array_alle);
+        wachthond($extdebug, 3, 'result_stgave_alle',               $result_stgave_alle);
+    } else {
+        wachthond($extdebug, 1, "SKIP stgave_civicrm_configure alle jaren: extensie niet actief", "[CID: $contact_id]");
+    }
+    watchdog('civicrm_timing', base_microtimer("EINDE stgave alle jaren"), NULL, WATCHDOG_DEBUG);
 
     watchdog('civicrm_timing', base_microtimer("EINDE 1.X get variables"), NULL, WATCHDOG_DEBUG);
 
@@ -1621,16 +1656,17 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         if ($ditjaar_pos_leid_event_type_id > 0 && in_array($ditjaar_pos_leid_event_type_id, $eventtypesleidall)) {
 
             $sync_data = [
-                'displayname' => $displayname,
-                'kampkort'    => $ditjaar_pos_leid_kampkort,    // Direct uit de pos_leid resultaten
-                'kampnaam'    => $ditjaar_event_kampnaam,
-                'event_start' => $ditjaar_event_start,
-                'event_einde' => $ditjaar_event_einde,
-                'pleklang'    => $ditjaar_event_pleklang,
-                'stadlang'    => $ditjaar_event_stadlang,
-                'kampjaar'    => $ditjaar_event_kampjaar,
-                'functie'     => $ditjaar_pos_leid_kampfunctie, // Direct uit de pos_leid resultaten[cite: 1]
-                'welkkamp'    => $ditjaar_leid_welkkamp,
+                'displayname'   => $displayname,
+                'kampkort'      => $ditjaar_pos_leid_kampkort,    // Direct uit de pos_leid resultaten
+                'kampnaam'      => $ditjaar_event_kampnaam,
+                'kampsoort'     => $ditjaar_event_kampsoort,
+                'event_start'   => $ditjaar_event_start,
+                'event_einde'   => $ditjaar_event_einde,
+                'pleklang'      => $ditjaar_event_pleklang,
+                'stadlang'      => $ditjaar_event_stadlang,
+                'kampjaar'      => $ditjaar_event_kampjaar,
+                'functie'       => $ditjaar_pos_leid_kampfunctie, // Direct uit de pos_leid resultaten[cite: 1]
+                'welkkamp'      => $ditjaar_leid_welkkamp,
             ];
 
             if (function_exists('partstatus_sync_trainingsdag_volledig')) {
@@ -1784,21 +1820,6 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     watchdog('civicrm_timing', base_microtimer("EINDE configure REGIO"), NULL, WATCHDOG_DEBUG);
     wachthond($extdebug,1, "vakantieregio",       $vakantieregio);
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,1, "### CORE 4.9 STGAVE CONFIGURE",                         "[groupID: $groupID] [op: $op]");
-    wachthond($extdebug,2, "########################################################################");
-
-    // Gave-logica verplaatst naar nl.onvergetelijk.stgave (stgave_civicrm_configure).
-    // Dit omvat: relatie type 20 ophalen, telefoon/email sync → locatietype Gave (26),
-    // line items 175/-55/-120, en regeling 'ja_stgave'.
-    watchdog('civicrm_timing', base_microtimer("START configure REL/GAVE (stgave ext)"), NULL, WATCHDOG_DEBUG);
-    if (function_exists('stgave_civicrm_configure')) {
-        $result_stgave = stgave_civicrm_configure($contact_id, $array_partditjaar ?? []);
-        wachthond($extdebug, 3, 'result_stgave',                 $result_stgave);
-    } else {
-        wachthond($extdebug, 1, "SKIP stgave_civicrm_configure: extensie niet actief", "[CID: $contact_id]");
-    }
-    watchdog('civicrm_timing', base_microtimer("EINDE configure REL/GAVE (stgave ext)"), NULL, WATCHDOG_DEBUG);
 
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 4.10 CONFIGURE AANDACHTSPUNTEN MEDISCH",              "MEDISCH]");
@@ -1928,44 +1949,58 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug,4, 'eventypesleid',         $eventtypesleid);
     wachthond($extdebug,4, 'eventypesleidtest',     $eventtypesleidtest); 
 
-    ### DEFINE PART_FUNCTIE & PART_ROL
+    // We gebruiken nu numerieke ID's om mismatches met labels te voorkomen
+    $rol_deelnemer      = 7;
+    $rol_leiding        = 1;
+    $rol_hoofdleiding    = 2;
+    $rol_deelnemer_top  = 11;
+    $rol_leiding_top    = 15; // Controleer dit ID in je CiviCRM (meestal 15)
+    $rol_deelnemer_gave = 16;
 
-    if (in_array($ditevent_event_type_id, $eventtypesdeelall)) {
-      $ditevent_part_functie    = 'deelnemer';
-      $ditevent_part_rol        = 'deelnemer';
-    }
-    if (in_array($ditevent_event_type_id, $eventtypesleidall)) {
-      $ditevent_part_functie    = $ditevent_leid_functie;
-      $ditevent_part_rol        = 'leiding';
-    }
+    $ditevent_rol_ids = [];
 
-    ### DEFINE PART ROLE_ID DEEL
-
+    // --- 1. DEELNEMER ROLLEN ---
     if (in_array($ditevent_event_type_id, $eventtypesdeel)) {
-      $ditevent_rol_id      = ['Deelnemer'];
+        $ditevent_rol_ids[] = $rol_deelnemer;
     }
     if (in_array($ditevent_event_type_id, $eventtypesdeeltest)) {
-      $ditevent_rol_id      = ['Deelnemer'];
+        $ditevent_rol_ids[] = $rol_deelnemer;
     }
     if (in_array($ditevent_event_type_id, $eventtypesdeeltoptest)) {
-      $ditevent_rol_id      = ['Deelnemer', 'Deelnemer Topkamp'];
+        $ditevent_rol_ids[] = $rol_deelnemer;
+        $ditevent_rol_ids[] = $rol_deelnemer_top;
     }
 
-    ### DEFINE PART ROLE_ID LEID
-
+    // --- 2. LEIDING ROLLEN ---
     if (in_array($ditevent_event_type_id, $eventtypesleidall)) {
-      $ditevent_rol_id      = ['Leiding'];
+        $ditevent_rol_ids[] = $rol_leiding;
     }
-    if (in_array($ditevent_part_functie, array('hoofdleiding'))) {
-      $ditevent_rol_id      = ['Leiding', 'Hoofdleiding'];
+    if (in_array($ditevent_part_functie, ['hoofdleiding'])) {
+        $ditevent_rol_ids[] = $rol_hoofdleiding;
+        $ditevent_rol_ids[] = $rol_leiding;
     }
-    if ($ditevent_leid_welkkamp == 'TOP') {
-      $ditevent_rol_id      = ['Leiding', 'Hoofdleiding', 'Leiding Topkamp'];
+    if ($ditevent_leid_welkkamp === 'TOP') {
+        $ditevent_rol_ids[] = $rol_leiding_top;
     }
 
-    wachthond($extdebug,1, 'ditevent_part_functie',     $ditevent_part_functie);
-    wachthond($extdebug,1, 'ditevent_part_rol',         $ditevent_part_rol);
-    wachthond($extdebug,1, 'ditevent_rol_id',           $ditevent_rol_id);
+    // --- 3. SPECIALE ROLLEN BEHOUDEN (St. Gave = 16) ---
+    // We kijken naar de rollen die Hussein NU al heeft in de database (of via St.Gave extensie)
+    $huidige_rollen = is_array($ditevent_part_role_id) 
+        ? $ditevent_part_role_id 
+        : array_filter(explode(CRM_Core_DAO::VALUE_SEPARATOR, trim((string)$ditevent_part_role_id, CRM_Core_DAO::VALUE_SEPARATOR)));
+
+    if (in_array(16, $huidige_rollen) || in_array('16', $huidige_rollen)) {
+        $ditevent_rol_ids[] = $rol_deelnemer_gave; 
+    }
+
+    // --- 4. ARRAY OPSCHONEN EN OPSLAAN ---
+    $ditevent_final_roles = array_values(array_unique(array_map('intval', $ditevent_rol_ids)));
+    $params_part_ditevent['values']['role_id'] = $ditevent_final_roles;
+
+    wachthond($extdebug, 1, 'DITEVENT ROLLEN (FINAAL)', $ditevent_final_roles);
+    wachthond($extdebug, 1, 'ditevent_part_functie',    $ditevent_part_functie);
+    wachthond($extdebug, 1, 'ditevent_part_rol',        $ditevent_part_rol);
+    wachthond($extdebug, 1, 'ditevent_rol_id',          $ditevent_final_roles);
 
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 5.6 CHECK OF ER SPRAKE IS VAN EEN VERJAARDAG TIJDENS DE KAMPWEEK", "[$birth_date]");
@@ -2294,6 +2329,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
             $params_contact['values']['DITJAAR.ditjaar_kamplang']               = $ditjaar_event_kampnaam;
             $params_contact['values']['DITJAAR.ditjaar_kampkort']               = $ditjaar_event_kampkort;
+            $params_contact['values']['DITJAAR.ditjaar_kampsoort']              = $ditjaar_event_kampsoort;
             $params_contact['values']['DITJAAR.ditjaar_kampjaar']               = $ditjaar_event_kampjaar;
             $params_contact['values']['DITJAAR.ditjaar_weeknr']                 = $ditjaar_event_weeknr;          
 
@@ -2435,8 +2471,8 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
             $params_contact['values']['DITJAAR.ditjaar_HL2_IMG']            = $event_hoofdleiding2_image_bn;
             $params_contact['values']['DITJAAR.ditjaar_HL3_IMG']            = $event_hoofdleiding3_image_bn;
 
-            $params_contact['values']['DITJAAR.ditjaar_fietshuur']          = $new_cont_fietshuur;
-            $params_contact['values']['DITJAAR.ditjaar_regeling']           = $new_kampgeldregeling;
+//          $params_contact['values']['DITJAAR.ditjaar_fietshuur']          = $new_cont_fietshuur;
+//          $params_contact['values']['DITJAAR.ditjaar_regeling']           = $new_kampgeldregeling;
 
         }
 
@@ -2505,6 +2541,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         if ($eventkamp_kamptype_id)         { $params_part_ditevent['values']['PART.PART_kamptype_id']      = $eventkamp_kamptype_id;       }
         if ($eventkamp_kampnaam)            { $params_part_ditevent['values']['PART.PART_kamplang']         = $eventkamp_kampnaam;          }
         if ($eventkamp_kampkort)            { $params_part_ditevent['values']['PART.PART_kampkort']         = $eventkamp_kampkort;          }
+        if ($eventkamp_kampsoort)           { $params_part_ditevent['values']['PART.PART_kampsoort']        = $eventkamp_kampsoort;         }
 
         if ($ditevent_part_groepsletter)    { $params_part_ditevent['values']['PART_INTERN.groep_letter']   = $ditevent_part_groepsletter;  }
         if ($ditevent_part_groepskleur)     { $params_part_ditevent['values']['PART_INTERN.groep_kleur']    = $ditevent_part_groepskleur;   }
@@ -2555,9 +2592,9 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
             $params_part_ditevent['values']['PART.PART_hoofd_3_fn'] = $event_hoofdleiding3_firstname;
         }
 
-        if ($toeristenbelasting)    { $params_part_ditevent['values']['PART.PART_Toeristenbelasting']   = $toeristenbelasting;      }
-        if ($new_kampgeldregeling)  { $params_part_ditevent['values']['PART_KAMPGELD.regeling']         = $new_kampgeldregeling;    }
-        if ($new_part_fietshuur)    { $params_part_ditevent['values']['PART_KAMPGELD.fietshuur']        = $new_part_fietshuur;      }
+//      if ($toeristenbelasting)    { $params_part_ditevent['values']['PART_KAMPGELD.toeristenbelasting'] = $toeristenbelasting;    }
+//      if ($new_kampgeldregeling)  { $params_part_ditevent['values']['PART_KAMPGELD.regeling']           = $new_kampgeldregeling;    }
+//      if ($new_part_fietshuur)    { $params_part_ditevent['values']['PART_KAMPGELD.fietshuur']          = $new_part_fietshuur;      }
 
         if ($ditevent_contribid)    { $params_part_ditevent['values']['PART_KAMPGELD.contribid']        = $ditevent_contribid;      }
 
