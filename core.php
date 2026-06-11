@@ -64,6 +64,154 @@ function core_civicrm_postCommit($op, $objectName, $objectId, &$objectRef) {
 
 */
 
+/**
+ * =======================================================================================
+ * HOOK: core_civicrm_post — Nieuwe Participant inschrijving
+ * =======================================================================================
+ * @description     Triggert direct na het aanmaken van een nieuwe Participant-record.
+ *                  Splitst op rol:
+ *                  - Deelnemer → partstatus_configure() (leeftijd + criteria + wachtlijst)
+ *                  - Leiding   → intake_civicrm_configure() (intake nodig + VOG/REF status)
+ *
+ * @why             Bij een nieuwe inschrijving via het formulier draait core_civicrm_custom
+ *                  niet (die slaat 'create' over). Hierdoor bleven de partstatus- en
+ *                  intake-velden leeg totdat er handmatig een wijziging werd opgeslagen.
+ *                  Deze hook vult die velden meteen bij de eerste aanmaak.
+ *
+ * @trigger         hook_civicrm_post (op='create', objectName='Participant')
+ * @dependencies    base_pid2part(), partstatus_configure(), intake_civicrm_configure(),
+ *                  base_cid2cont(), base_find_allpart()
+ * =======================================================================================
+ */
+function core_civicrm_post($op, $objectName, $objectId, &$objectRef) {
+
+    // Alleen nieuwe Participant-records verwerken
+    if ($objectName !== 'Participant' || $op !== 'create') {
+        return;
+    }
+
+    // Anti-recursie: voorkom dat een DB-write in deze functie opnieuw deze hook triggert
+    static $processing_new_participant = [];
+    if (isset($processing_new_participant[$objectId])) {
+        return;
+    }
+    $processing_new_participant[$objectId] = TRUE;
+
+    $extdebug = 'core.nieuwe_inschrijving'; // Kanaal voor centrale debug-config; niveau wordt opgezocht in ozk.debug.config.php
+
+    wachthond($extdebug, 2, "########################################################################");
+    wachthond($extdebug, 1, "### CORE [POST] NIEUWE INSCHRIJVING",             "[PID: $objectId]");
+    wachthond($extdebug, 2, "########################################################################");
+
+    // ==============================================================================
+    // 1.0 PARTICIPANT DATA OPHALEN
+    // ==============================================================================
+    if (!function_exists('base_pid2part')) {
+        wachthond($extdebug, 1, "SKIP: base_pid2part() niet beschikbaar.");
+        unset($processing_new_participant[$objectId]);
+        return;
+    }
+
+    $array_part = base_pid2part($objectId);
+    if (empty($array_part)) {
+        wachthond($extdebug, 1, "SKIP: Geen participant data gevonden voor PID $objectId.");
+        unset($processing_new_participant[$objectId]);
+        return;
+    }
+
+    $part_rol   = $array_part['part_rol']   ?? 'deelnemer';
+    $contact_id = $array_part['contact_id'] ?? 0;
+
+    // ==============================================================================
+    // 1.5 SLIM SKIP: CONTROLEER OF CUSTOMPRE AL HEEFT GEDRAAID
+    // ==============================================================================
+    // Als partstatus_civicrm_customPre (groep 271) al draaide tijdens de save,
+    // zijn de partstatus-velden al ingevuld. Dan hoeven we niet dubbel te draaien.
+    // Sleutelnamen zijn die van base_pid2part():
+    //   Deelnemer → 'criteria_indicatie' (gevuld door partstatus_configure)
+    //   Leiding   → 'part_intstatus'     (gevuld door intake_civicrm_configure)
+    if ($part_rol === 'deelnemer') {
+        $al_verwerkt = !empty($array_part['criteria_indicatie']);
+        if ($al_verwerkt) {
+            wachthond($extdebug, 1, "SKIP: partstatus al verwerkt door customPre (criteria_indicatie aanwezig).", "[PID: $objectId]");
+            unset($processing_new_participant[$objectId]);
+            return;
+        }
+    }
+    if ($part_rol === 'leiding') {
+        $al_verwerkt = !empty($array_part['part_intstatus']) && $array_part['part_intstatus'] !== 'onbekend';
+        if ($al_verwerkt) {
+            wachthond($extdebug, 1, "SKIP: intake al verwerkt door customPre (part_intstatus aanwezig).", "[PID: $objectId]");
+            unset($processing_new_participant[$objectId]);
+            return;
+        }
+    }
+
+    wachthond($extdebug, 3, 'part_rol',   $part_rol);
+    wachthond($extdebug, 3, 'contact_id', $contact_id);
+
+    if (empty($contact_id)) {
+        wachthond($extdebug, 1, "SKIP: Geen contact_id gevonden in participant data.");
+        unset($processing_new_participant[$objectId]);
+        return;
+    }
+
+    // ==============================================================================
+    // 2.0 DEELNEMER → PARTSTATUS (leeftijd + criteria + wachtlijst)
+    // ==============================================================================
+    if ($part_rol === 'deelnemer') {
+
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE [POST] 2.0 DEELNEMER: PARTSTATUS UITVOEREN",   "[DEELNEMER]");
+        wachthond($extdebug, 2, "########################################################################");
+
+        if (!function_exists('partstatus_configure')) {
+            wachthond($extdebug, 1, "SKIP: partstatus_configure() niet beschikbaar.");
+        } else {
+            watchdog('civicrm_timing', base_microtimer("START nieuwe_inschrijving partstatus [PID: $objectId]"), NULL, WATCHDOG_DEBUG);
+
+            $ctx = partstatus_configure($objectId, $array_part, NULL, 'nieuwe_inschrijving');
+            wachthond($extdebug, 3, 'partstatus ctx', $ctx);
+
+            watchdog('civicrm_timing', base_microtimer("EINDE nieuwe_inschrijving partstatus"), NULL, WATCHDOG_DEBUG);
+
+            wachthond($extdebug, 1, "### CORE [POST] 2.0 PARTSTATUS VOLTOOID",           "[SUCCESS]");
+        }
+    }
+
+    // ==============================================================================
+    // 3.0 LEIDING → INTAKE (intake_nodig + VOG/REF status klaarzetten)
+    // ==============================================================================
+    if ($part_rol === 'leiding') {
+
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### CORE [POST] 3.0 LEIDING: INTAKE UITVOEREN",           "[LEIDING]");
+        wachthond($extdebug, 2, "########################################################################");
+
+        if (!function_exists('intake_civicrm_configure') || !function_exists('base_cid2cont') || !function_exists('base_find_allpart')) {
+            wachthond($extdebug, 1, "SKIP: intake_civicrm_configure() of base-helpers niet beschikbaar.");
+        } else {
+            watchdog('civicrm_timing', base_microtimer("START nieuwe_inschrijving intake [PID: $objectId]"), NULL, WATCHDOG_DEBUG);
+
+            $cont_array = base_cid2cont($contact_id) ?: [];
+            $params     = []; // Lege params: geen formulierdata, pure herberekening
+
+            $result_intake = intake_civicrm_configure($cont_array, $array_part, $params, 'nieuwe_inschrijving');
+            wachthond($extdebug, 3, 'result_intake', $result_intake);
+
+            watchdog('civicrm_timing', base_microtimer("EINDE nieuwe_inschrijving intake"), NULL, WATCHDOG_DEBUG);
+
+            wachthond($extdebug, 1, "### CORE [POST] 3.0 INTAKE VOLTOOID",               "[SUCCESS]");
+        }
+    }
+
+    wachthond($extdebug, 2, "########################################################################");
+    wachthond($extdebug, 1, "### CORE [POST] NIEUWE INSCHRIJVING AFGEROND",       "[PID: $objectId]");
+    wachthond($extdebug, 2, "########################################################################");
+
+    unset($processing_new_participant[$objectId]);
+}
+
 function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
     // Static variabele om dubbele executie in dezelfde request te voorkomen
@@ -929,23 +1077,23 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
     $ditjaar_wait_part_id               = $array_allpart_ditjaar['result_allpart_wait_part_id'];
     $ditjaar_pen_part_id                = $array_allpart_ditjaar['result_allpart_pen_part_id'];
-    $ditjaar_neg_part_id                = $array_allpart_ditjaar['result_allpart_neg_part_id'];
+    $ditjaar_neg_part_id                = $array_allpart_ditjaar['result_allpart_neg_part_id']       ?? NULL;
 
     $ditjaar_wait_event_id              = $array_allpart_ditjaar['result_allpart_wait_event_id'];
     $ditjaar_pen_event_id               = $array_allpart_ditjaar['result_allpart_pen_event_id'];
-    $ditjaar_neg_event_id               = $array_allpart_ditjaar['result_allpart_neg_event_id'];
+    $ditjaar_neg_event_id               = $array_allpart_ditjaar['result_allpart_neg_event_id']      ?? NULL;
 
     $ditjaar_wait_event_type_id         = $array_allpart_ditjaar['result_allpart_wait_event_type_id'];
     $ditjaar_pen_event_type_id          = $array_allpart_ditjaar['result_allpart_pen_event_type_id'];
-    $ditjaar_neg_event_type_id          = $array_allpart_ditjaar['result_allpart_neg_event_type_id'];
+    $ditjaar_neg_event_type_id          = $array_allpart_ditjaar['result_allpart_neg_event_type_id'] ?? NULL;
 
     $ditjaar_wait_status_id             = $array_allpart_ditjaar['result_allpart_wait_status_id'];
     $ditjaar_pen_status_id              = $array_allpart_ditjaar['result_allpart_pen_status_id'];
-    $ditjaar_neg_status_id              = $array_allpart_ditjaar['result_allpart_neg_status_id'];
+    $ditjaar_neg_status_id              = $array_allpart_ditjaar['result_allpart_neg_status_id']     ?? NULL;
 
     $ditjaar_wait_kampkort              = $array_allpart_ditjaar['result_allpart_wait_kampkort'];
     $ditjaar_pen_kampkort               = $array_allpart_ditjaar['result_allpart_pen_kampkort'];
-    $ditjaar_neg_kampkort               = $array_allpart_ditjaar['result_allpart_neg_kampkort'];
+    $ditjaar_neg_kampkort               = $array_allpart_ditjaar['result_allpart_neg_kampkort']      ?? NULL;
 
     if ($ditjaar_pos_count       == 1) { ### 1 POS ALL
         wachthond($extdebug,2,  "DIT JAAR: UIT $ditjaar_all_count PARTICIPANTS $ditjaar_pos_count POSITIEVE DEELNAME GEVONDEN [D/L]","$ditjaar_pos_part_id ($ditjaar_pos_kampkort $ditjaar_refyear)");
@@ -1034,23 +1182,23 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
 
     $eventjaar_wait_part_id             = $array_allpart_eventjaar['result_allpart_wait_part_id'];
     $eventjaar_pen_part_id              = $array_allpart_eventjaar['result_allpart_pen_part_id'];
-    $eventjaar_neg_part_id              = $array_allpart_eventjaar['result_allpart_neg_part_id'];
+    $eventjaar_neg_part_id              = $array_allpart_eventjaar['result_allpart_neg_part_id']       ?? NULL;
 
     $eventjaar_wait_event_id            = $array_allpart_eventjaar['result_allpart_wait_event_id'];
     $eventjaar_pen_event_id             = $array_allpart_eventjaar['result_allpart_pen_event_id'];
-    $eventjaar_neg_event_id             = $array_allpart_eventjaar['result_allpart_neg_event_id'];
+    $eventjaar_neg_event_id             = $array_allpart_eventjaar['result_allpart_neg_event_id']      ?? NULL;
 
     $eventjaar_wait_event_type_id       = $array_allpart_eventjaar['result_allpart_wait_event_type_id'];
     $eventjaar_pen_event_type_id        = $array_allpart_eventjaar['result_allpart_pen_event_type_id'];
-    $eventjaar_neg_event_type_id        = $array_allpart_eventjaar['result_allpart_neg_event_type_id'];
+    $eventjaar_neg_event_type_id        = $array_allpart_eventjaar['result_allpart_neg_event_type_id'] ?? NULL;
 
     $eventjaar_wait_status_id           = $array_allpart_eventjaar['result_allpart_wait_status_id'];
     $eventjaar_pen_status_id            = $array_allpart_eventjaar['result_allpart_pen_status_id'];
-    $eventjaar_neg_status_id            = $array_allpart_eventjaar['result_allpart_neg_status_id'];
+    $eventjaar_neg_status_id            = $array_allpart_eventjaar['result_allpart_neg_status_id']     ?? NULL;
 
     $eventjaar_wait_kampkort            = $array_allpart_eventjaar['result_allpart_wait_kampkort'];
     $eventjaar_pen_kampkort             = $array_allpart_eventjaar['result_allpart_pen_kampkort'];
-    $eventjaar_neg_kampkort             = $array_allpart_eventjaar['result_allpart_neg_kampkort'];
+    $eventjaar_neg_kampkort             = $array_allpart_eventjaar['result_allpart_neg_kampkort']      ?? NULL;
 
     if ($eventjaar_pos_count       == 1) { ### 1 POS ALL
         wachthond($extdebug,2,  "DIT EVENTJAAR: UIT $eventjaar_all_count PARTICIPANTS $eventjaar_pos_count POSITIEVE DEELNAME GEVONDEN [D/L]","$eventjaar_pos_part_id ($eventjaar_pos_kampkort $eventjaar_refyear)");
@@ -1412,7 +1560,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         // Trigger stgave ALTIJD, niet alleen voor ditjaar. De detectielogica in stgave
         // bepaalt zelf of dit een St.Gave contact is (rol 16, regeling ja_stgave, of line items).
         // Dit zorgt dat ook historische St.Gave deelnemers kunnen worden hersteld.
-        $part_array_alle = base_pid2part($entityID);
+        $part_array_alle = base_pid2part($entityID) ?: [];
         $result_stgave_alle = stgave_civicrm_configure($contact_id, $part_array_alle);
         wachthond($extdebug, 3, 'result_stgave_alle',               $result_stgave_alle);
     } else {
@@ -1670,27 +1818,9 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         wachthond($extdebug,1, "### CORE 4.1 CORE SYNC NAAR TRAININGSDAG","[groupID: $groupID] [op: $op]");
         wachthond($extdebug,2, "########################################################################");
 
-        // Gebruik de APIv4 resultaten van de 'Positieve Leiding' check
-        if ($ditjaar_pos_leid_event_type_id > 0 && in_array($ditjaar_pos_leid_event_type_id, $eventtypesleidall)) {
-
-            $sync_data = [
-                'displayname'   => $displayname,
-                'kampkort'      => $ditjaar_pos_leid_kampkort,    // Direct uit de pos_leid resultaten
-                'kampnaam'      => $ditjaar_event_kampnaam,
-                'kampsoort'     => $ditjaar_event_kampsoort,
-                'event_start'   => $ditjaar_event_start,
-                'event_einde'   => $ditjaar_event_einde,
-                'pleklang'      => $ditjaar_event_pleklang,
-                'stadlang'      => $ditjaar_event_stadlang,
-                'kampjaar'      => $ditjaar_event_kampjaar,
-                'functie'       => $ditjaar_pos_leid_kampfunctie, // Direct uit de pos_leid resultaten[cite: 1]
-                'welkkamp'      => $ditjaar_leid_welkkamp,
-            ];
-
-            if (function_exists('partstatus_sync_trainingsdag_volledig')) {
-                partstatus_sync_trainingsdag_volledig($contact_id, $today_kampjaar, $sync_data);
-            }
-        }
+        // De trainingsdag-registratie wordt aangemaakt door ACL 10.0 in acl_civicrm_configure(),
+        // die verderop in deze functie wordt aangeroepen. Na aanmaken verrijkt de training
+        // extensie (training_civicrm_post) het participant-record automatisch met kampdata.
 
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 4.1 CONSTRUCT (DRUPAL) USERNAME","[groupID: $groupID] [op: $op]");
@@ -1710,7 +1840,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     $first_name                 = $array_username['first_name'];
     $middle_name                = $array_username['middle_name'];
     $last_name                  = $array_username['last_name'];
-    $nick_name                  = $array_username['nick_name'];
+    $nick_name                  = $array_username['nick_name']               ?? NULL;
 
     $user_name                  = $array_username['user_name'];
     $user_name_nick             = $array_username['user_name_nick'];
@@ -1953,6 +2083,8 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         wachthond($extdebug,3, 'ditjaarleidmss',    $ditjaarleidmss);
 
     }
+
+    $part_kampkort = $part_kampkort ?? NULL;
 
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### CORE 5.5 SAVE CORRECT PARTICIPANT ROLE ID", "[$displayname $ditevent_part_functie $part_kampkort]");
@@ -2319,19 +2451,24 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
             $params_contact['values']['PRIVACY.familienaam']                = $familienaam;
         }
 
-        if ($leeftijd_nextkamp_decimalen > 0) {
-            $params_contact['values']['WERVING.nextkamp_decimalen']         = $leeftijd_nextkamp_decimalen;
-            $params_contact['values']['WERVING.nextkamp_rondjaren']         = $leeftijd_nextkamp_rondjaren;
-            $params_contact['values']['WERVING.nextkamp_rondmaand']         = $leeftijd_nextkamp_rondmaand;
-        }
-        if ($leeftijd_vantoday_decimalen > 0) {
-            $params_contact['values']['WERVING.leeftijd_decimalen']         = $leeftijd_vantoday_decimalen;
-            $params_contact['values']['WERVING.leeftijd_rondjaren']         = $leeftijd_vantoday_rondjaren;
-        }
-
-        if (empty($werving_vakantieregio) AND $vakantieregio) {
-            $params_contact['values']['WERVING.vakantieregio']              = $vakantieregio;
-        }
+        // WERVING-leeftijdsvelden worden al berekend en geschreven door de werving-extensie
+        // (werving_civicrm_configure → new_leeftijd_decimalen, new_nextkamp_decimalen, new_vakantieregio).
+        // Core schrijft ze hier niet meer: anders triggert de Contact.update op WERVING (group 270)
+        // opnieuw civicrm_custom → potentiële loop als WERVING ooit in profilecvmax komt.
+        // Verwijderd door: refactor leeftijd-verantwoordelijkheid naar werving-extensie.
+        //
+        // if ($leeftijd_nextkamp_decimalen > 0) {
+        //     $params_contact['values']['WERVING.nextkamp_decimalen']     = $leeftijd_nextkamp_decimalen;
+        //     $params_contact['values']['WERVING.nextkamp_rondjaren']     = $leeftijd_nextkamp_rondjaren;
+        //     $params_contact['values']['WERVING.nextkamp_rondmaand']     = $leeftijd_nextkamp_rondmaand;
+        // }
+        // if ($leeftijd_vantoday_decimalen > 0) {
+        //     $params_contact['values']['WERVING.leeftijd_decimalen']     = $leeftijd_vantoday_decimalen;
+        //     $params_contact['values']['WERVING.leeftijd_rondjaren']     = $leeftijd_vantoday_rondjaren;
+        // }
+        // if (empty($werving_vakantieregio) AND $vakantieregio) {
+        //     $params_contact['values']['WERVING.vakantieregio']          = $vakantieregio;
+        // }
 
         if ($contact_foto)      { $params_contact['values']['image_URL']    = $contact_foto;    }
 
@@ -2470,6 +2607,15 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         ### DIT EVENT & DIT JAAR DEEL OF DIT JAAR LEID
         #####################################################
 
+        $event_hoofdleiding2_displname  = $event_hoofdleiding2_displname  ?? NULL;
+        $event_hoofdleiding2_firstname  = $event_hoofdleiding2_firstname  ?? NULL;
+        $event_hoofdleiding2_phone      = $event_hoofdleiding2_phone      ?? NULL;
+        $event_hoofdleiding2_image_bn   = $event_hoofdleiding2_image_bn   ?? NULL;
+        $event_hoofdleiding3_displname  = $event_hoofdleiding3_displname  ?? NULL;
+        $event_hoofdleiding3_firstname  = $event_hoofdleiding3_firstname  ?? NULL;
+        $event_hoofdleiding3_phone      = $event_hoofdleiding3_phone      ?? NULL;
+        $event_hoofdleiding3_image_bn   = $event_hoofdleiding3_image_bn   ?? NULL;
+
         if ($ditjaardeelyes == 1 OR $ditjaarleidyes == 1) {
 
             wachthond($extdebug,2, "########################################################################");
@@ -2595,6 +2741,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         if ($ditevent_register_date)        { $params_part_ditevent['values']['PART.regdate']               = $ditevent_register_date;      }
         if ($ditevent_part_rol)             { $params_part_ditevent['values']['PART.PART_kamprol']          = $ditevent_part_rol;           }
         if ($ditevent_part_functie)         { $params_part_ditevent['values']['PART.PART_kampfunctie']      = $ditevent_part_functie;       }
+        $ditevent_rol_id = $ditevent_rol_id ?? NULL;
         if ($ditevent_rol_id)               { $params_part_ditevent['values']['role_id:name']               = $ditevent_rol_id;             }
 
         if ($event_hoofdleiding1_displname) {
@@ -2906,6 +3053,8 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug,1, "########################################################################");
     wachthond($extdebug,1, "### CORE 99. d PERFORM DB UPDATE $displayname", "bid: $ditevent_contribid \t/ $ditevent_part_functie $eventkamp_kampkort $eventkamp_kampjaar");
     wachthond($extdebug,1, "########################################################################");
+
+    $extwrite_contrib = $extwrite_contrib ?? FALSE;
 
     wachthond($extdebug,3, "extwrite_contrib",                      $extwrite_contrib);
     wachthond($extdebug,3, 'params_contrib',                        $params_contrib);
