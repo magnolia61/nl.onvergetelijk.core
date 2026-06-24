@@ -491,4 +491,202 @@ class CoreHooksTest extends \PHPUnit\Framework\TestCase implements EndToEndInter
       'Als deze test faalt, zijn de WERVING-writes in core.php weer actief — check de uitgecommentarieerde regels in sectie 8.1b.'
     );
   }
+
+  // ########################################################################
+  // ### SCENARIO H: POST VULT KAMPVELDEN BIJ NIEUWE AANMELDING (FIX A + B)
+  // ########################################################################
+
+  /**
+   * Helper: zoek een actief deel-event MET ingevulde kamp-kenmerken (kampkort +
+   * kamplocatie), zodat we de kampveld-invulling én de locatie/plaats kunnen
+   * verifiëren. Geeft [eventId, kampkort, pleklang, stadlang] of NULL.
+   */
+  private function vindKampeventMetKenmerken() {
+    if (!function_exists('get_event_types') || !function_exists('base_eid2event')) {
+      return NULL;
+    }
+    $eventtypes = get_event_types();
+    $deelTypes  = $eventtypes['deel'] ?? [];
+    if (empty($deelTypes)) {
+      return NULL;
+    }
+
+    $events = \civicrm_api4('Event', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [
+        ['event_type_id',              'IN',         $deelTypes],
+        ['is_active',                  '=',          TRUE],
+        ['Event_Kenmerken.kampkort',   'IS NOT NULL'],
+        ['Event_Kenmerken.kamplocatie','IS NOT NULL'],
+      ],
+      'select'           => ['id', 'Event_Kenmerken.kampkort'],
+      'limit'            => 1,
+    ]);
+    if ($events->count() === 0) {
+      return NULL;
+    }
+    $event = $events->first();
+
+    // Bron-van-waarheid voor locatie/plaats: precies wat base_eid2event oplost en
+    // wat core in PART_kamplocatie/PART_kampplaats hoort te schrijven.
+    $info = base_eid2event((int) $event['id'], NULL);
+
+    return [
+      'eventId'  => (int) $event['id'],
+      'kampkort' => $event['Event_Kenmerken.kampkort'],
+      'pleklang' => $info['eventkamp_pleklang'] ?? NULL,
+      'stadlang' => $info['eventkamp_stadlang'] ?? NULL,
+    ];
+  }
+
+  /**
+   * FIX A + B (deelnemer): na core_civicrm_post('create') op een nieuwe deelnemer
+   * moeten de kampvelden gevuld zijn — kampkort/kamplang ÉN kamplocatie/kampplaats.
+   *
+   * Achtergrond: core_civicrm_custom slaat 'create' over; de post-hook moet de
+   * volledige invulling alsnog draaien. Vóór de fix bleven deze velden leeg tot een
+   * latere edit, waardoor de aanmeldingsnotificatie met lege kampgegevens uitging.
+   *
+   * Tevens regressie op de prefix-bug: core schreef ooit naar PART.kamplocatie i.p.v.
+   * PART.PART_kamplocatie (idem kampplaats/kampjaar) → write werd stil genegeerd.
+   * Als die bug terugkomt, blijven PART_kamplocatie/PART_kampplaats leeg en faalt deze test.
+   */
+  public function testPostVultKampveldenBijNieuweDeelnemer() {
+    if (!function_exists('core_civicrm_post')) {
+      $this->markTestSkipped('core_civicrm_post() niet beschikbaar.');
+    }
+
+    $kamp = $this->vindKampeventMetKenmerken();
+    if ($kamp === NULL) {
+      $this->markTestSkipped('Geen actief deel-event met kamplocatie-kenmerken gevonden.');
+    }
+
+    $contactId = $this->callAPISuccess('Contact', 'create', [
+      'contact_type' => 'Individual',
+      'first_name'   => 'CorePost',
+      'last_name'    => 'KampveldDeel',
+      'birth_date'   => '2014-01-01',
+    ])['id'];
+
+    $participantId = \civicrm_api4('Participant', 'create', [
+      'checkPermissions' => FALSE,
+      'values'           => [
+        'contact_id'     => $contactId,
+        'event_id'       => $kamp['eventId'],
+        'status_id:name' => 'Registered',
+      ],
+    ])->first()['id'];
+
+    // Simuleer de create-hook
+    $objectRef = new \stdClass();
+    core_civicrm_post('create', 'Participant', $participantId, $objectRef);
+
+    $part = \civicrm_api4('Participant', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [['id', '=', $participantId]],
+      'select'           => ['PART.PART_kampkort', 'PART.PART_kamplocatie', 'PART.PART_kampplaats'],
+    ])->first();
+
+    // FIX A: kampkort wordt gevuld bij create
+    $this->assertNotEmpty($part['PART.PART_kampkort'] ?? NULL,
+      'PART_kampkort moet door de post-hook gevuld zijn bij een nieuwe deelnemer.');
+    $this->assertEquals($kamp['kampkort'], $part['PART.PART_kampkort'],
+      'PART_kampkort moet overeenkomen met het kampkort van het event.');
+
+    // FIX B (prefix-bug regressie): locatie/plaats moeten gevuld zijn met het label
+    if (!empty($kamp['pleklang'])) {
+      $this->assertEquals($kamp['pleklang'], $part['PART.PART_kamplocatie'] ?? NULL,
+        'PART_kamplocatie moet gevuld zijn. Leeg = prefix-bug terug (PART.kamplocatie i.p.v. PART.PART_kamplocatie).');
+    }
+    if (!empty($kamp['stadlang'])) {
+      $this->assertEquals($kamp['stadlang'], $part['PART.PART_kampplaats'] ?? NULL,
+        'PART_kampplaats moet gevuld zijn. Leeg = prefix-bug terug (PART.kampplaats i.p.v. PART.PART_kampplaats).');
+    }
+
+    // En de spiegel op contact-niveau (notificatie-subjecttokens lezen DITJAAR)
+    $cont = \civicrm_api4('Contact', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [['id', '=', $contactId]],
+      'select'           => ['DITJAAR.ditjaar_kampkort'],
+    ])->first();
+    $this->assertNotEmpty($cont['DITJAAR.ditjaar_kampkort'] ?? NULL,
+      'DITJAAR.ditjaar_kampkort op het contact moet gevuld zijn bij create.');
+  }
+
+  /**
+   * FIX A + B (leiding): een leiding registreert op het GENERIEKE leiding-event en
+   * geeft via PART_LEID.Welk_kamp aan bij welk kamp ze hoort. core_civicrm_post moet
+   * dat slim oplossen (base_eid2event SCENARIO B) en kampkort + locatie/plaats vullen.
+   *
+   * Dit was de oorspronkelijke bug: de leiding-notificatie ging leeg uit omdat deze
+   * velden bij create niet gevuld werden.
+   */
+  public function testPostVultKampveldenBijNieuweLeiding() {
+    if (!function_exists('core_civicrm_post') || !function_exists('get_event_types')) {
+      $this->markTestSkipped('Vereiste functies niet beschikbaar.');
+    }
+
+    // Een deel-kamp met kenmerken levert de kampkort die de leiding "kiest"
+    $kamp = $this->vindKampeventMetKenmerken();
+    if ($kamp === NULL) {
+      $this->markTestSkipped('Geen deel-kamp met kenmerken gevonden om naar te verwijzen.');
+    }
+
+    // Zoek een actief leiding-event
+    $eventtypes = get_event_types();
+    $leidTypes  = $eventtypes['leid'] ?? [];
+    if (empty($leidTypes)) {
+      $this->markTestSkipped('Geen leiding-eventtypes gevonden.');
+    }
+    $leidEvents = \civicrm_api4('Event', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [
+        ['event_type_id', 'IN', $leidTypes],
+        ['is_active',     '=',  TRUE],
+      ],
+      'select'           => ['id'],
+      'limit'            => 1,
+    ]);
+    if ($leidEvents->count() === 0) {
+      $this->markTestSkipped('Geen actief leiding-event gevonden.');
+    }
+    $leidEventId = $leidEvents->first()['id'];
+
+    $contactId = $this->callAPISuccess('Contact', 'create', [
+      'contact_type' => 'Individual',
+      'first_name'   => 'CorePost',
+      'last_name'    => 'KampveldLeid',
+      'birth_date'   => '2005-01-01',
+    ])['id'];
+
+    // Welk_kamp wordt hoofdletter-vorm opgeslagen (bijv. "BK2")
+    $participantId = \civicrm_api4('Participant', 'create', [
+      'checkPermissions' => FALSE,
+      'values'           => [
+        'contact_id'           => $contactId,
+        'event_id'             => $leidEventId,
+        'status_id:name'       => 'Registered',
+        'PART_LEID.Welk_kamp'  => strtoupper($kamp['kampkort']),
+      ],
+    ])->first()['id'];
+
+    $objectRef = new \stdClass();
+    core_civicrm_post('create', 'Participant', $participantId, $objectRef);
+
+    $part = \civicrm_api4('Participant', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [['id', '=', $participantId]],
+      'select'           => ['PART.PART_kampkort', 'PART.PART_kamplocatie', 'PART.PART_kampplaats'],
+    ])->first();
+
+    // De leiding-kamp is via Welk_kamp opgelost naar het juiste kampkort
+    $this->assertEquals(strtolower($kamp['kampkort']), strtolower((string) ($part['PART.PART_kampkort'] ?? '')),
+      'PART_kampkort van de leiding moet via Welk_kamp opgelost zijn naar het gekozen kamp.');
+
+    // Prefix-bug regressie ook op het leiding-pad
+    if (!empty($kamp['pleklang'])) {
+      $this->assertEquals($kamp['pleklang'], $part['PART.PART_kamplocatie'] ?? NULL,
+        'PART_kamplocatie moet ook voor leiding gevuld zijn (regressie prefix-bug).');
+    }
+  }
 }
