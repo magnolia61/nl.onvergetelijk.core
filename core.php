@@ -1618,6 +1618,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         $array_status_ditevent       = $ctx_ditevent; 
         $leeftijd_ditevent_decimalen = $ctx_ditevent['leeftijd']['event']['leeftijd_decimalen'] ?? NULL;
         $leeftijd_ditevent_rondjaren = $ctx_ditevent['leeftijd']['event']['leeftijd_rondjaren'] ?? NULL;
+        $leeftijd_ditevent_rondmaand = $ctx_ditevent['leeftijd']['event']['leeftijd_rondmaand'] ?? NULL;
     }
 
     // --------------------------------------------------------------------------------------
@@ -2762,6 +2763,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         if ($leeftijd_ditevent_decimalen)   {
             $params_part_ditevent['values']['PART.nextkamp_decimalen']  = $leeftijd_ditevent_decimalen;
             $params_part_ditevent['values']['PART.nextkamp_rondjaren']  = $leeftijd_ditevent_rondjaren;
+            $params_part_ditevent['values']['PART.nextkamp_rondmaand']  = $leeftijd_ditevent_rondmaand;
         }
 
         if ($ditevent_register_date)        { $params_part_ditevent['values']['PART.regdate']               = $ditevent_register_date;      }
