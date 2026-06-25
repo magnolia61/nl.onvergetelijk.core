@@ -1597,6 +1597,31 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     watchdog('civicrm_timing', base_microtimer("EINDE 1.X get variables"), NULL, WATCHDOG_DEBUG);
 
     wachthond($extdebug, 2, "########################################################################");
+    wachthond($extdebug, 1, "### CORE 1.9 VROEGE PERSIST part_kampkort (deadlock-veiligheid)", "[$eventkamp_kampkort]");
+    wachthond($extdebug, 2, "########################################################################");
+
+    // De volledige event->participant sync (incl. PART_kampkort) gebeurt pas in CORE 8.2/99.x, ná
+    // de ACL- (4.3) en email- (4.4) secties. Die lezen civicrm_acl_contact_cache en kunnen bij
+    // gelijktijdige registratie-requests sneuvelen op een MySQL-deadlock (1213/1412), waardoor de
+    // hele request afbreekt vóór 8.2 en part_kampkort leeg blijft -> vals criteria-oordeel + mail.
+    // Daarom persisten we het kampkort hier alvast via DIRECTE SQL: géén hooks (dus geen extra
+    // ACL-cache-druk en geen re-entrancy), idempotent met de latere API-write. Zo overleeft het
+    // kampkort een latere abort. Zie geheugen: acl_cache_deadlock_registratie / criteria_kampkort_fallback.
+    if ($extdjpart == 1 && in_array($groupID, $profilepart) && $ditevent_part_id > 0 && !empty($eventkamp_kampkort)) {
+        try {
+            CRM_Core_DAO::executeQuery(
+                "INSERT INTO civicrm_value_part_118 (entity_id, part_kampkort_950) VALUES (%1, %2)
+                 ON DUPLICATE KEY UPDATE part_kampkort_950 = %2",
+                [1 => [$ditevent_part_id, 'Integer'], 2 => [$eventkamp_kampkort, 'String']]
+            );
+            wachthond($extdebug, 1, "Vroege kampkort-persist OK", "[PID $ditevent_part_id = $eventkamp_kampkort]");
+        } catch (\Throwable $e) {
+            // Niet fataal: CORE 8.2 schrijft het later opnieuw, en partstatus heeft een kampkort-fallback.
+            wachthond($extdebug, 1, "Vroege kampkort-persist faalde (genegeerd)", $e->getMessage());
+        }
+    }
+
+    wachthond($extdebug, 2, "########################################################################");
     wachthond($extdebug, 1, "### CORE 2.X PARTSTATUS LEEFTIJD/CRITERIA/WACHTLIJST",   "[$displayname]");
     wachthond($extdebug, 2, "########################################################################");
 
