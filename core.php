@@ -1600,15 +1600,52 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug, 1, "### CORE 1.9 VROEGE PERSIST part_kampkort (deadlock-veiligheid)", "[$eventkamp_kampkort]");
     wachthond($extdebug, 2, "########################################################################");
 
-    // De volledige event->participant sync (incl. PART_kampkort) gebeurt pas in CORE 8.2/99.x, ná
-    // de ACL- (4.3) en email- (4.4) secties. Die lezen civicrm_acl_contact_cache en kunnen bij
-    // gelijktijdige registratie-requests sneuvelen op een MySQL-deadlock (1213/1412), waardoor de
-    // hele request afbreekt vóór 8.2 en part_kampkort leeg blijft -> vals criteria-oordeel + mail.
-    // Daarom persisten we het kampkort hier alvast via DIRECTE SQL: géén hooks (dus geen extra
-    // ACL-cache-druk en geen re-entrancy), idempotent met de latere API-write. Zo overleeft het
-    // kampkort een latere abort. Zie geheugen: acl_cache_deadlock_registratie / criteria_kampkort_fallback.
+    /*
+     * SAMENVATTING SECTIE 1.9 — VROEGE PERSIST part_kampkort (deadlock-veiligheid)
+     * ----------------------------------------------------------------------------------------
+     * FUNCTIONEEL (het waarom):
+     *   part_kampkort (het kampcodeveld op de deelnemer, bv. 'jk1') is de spil van de
+     *   criteria-check: zonder kampkort matcht geen enkele leeftijds-/schoolband en wordt een
+     *   deelnemer onterecht als 'afwijkend' beoordeeld -> wachtlijst + een spannende oudermail.
+     *   Dit veld wordt normaal vanuit het event op de deelnemer gesynct, maar dat gebeurt pas
+     *   verderop in CORE 8.2 (params bouwen) / CORE 99.x (de daadwerkelijke API-write) — dus NÁ
+     *   de ACL-sectie (4.3) en de email-sectie (4.4).
+     *
+     * TECHNISCH (het probleem dat we hier afvangen):
+     *   Bij een online inschrijving vuurt de browser een burst van overlappende requests, die
+     *   elk (delen van) deze trage hook-stack draaien (~12-19s). Een nieuwe inschrijving voegt
+     *   het contact toe aan z'n kamp/rol-groepen; CiviCRM TRUNCATE't daarop civicrm_acl_contact_cache.
+     *   Leest een gelijktijdige request die cache net dan (ACL-permissiecheck in 4.3/4.4), dan
+     *   volgt een MySQL-deadlock (1213) / "table definition has changed" (1412) -> fatale
+     *   DBQueryException -> de request breekt af VÓÓR CORE 8.2, en part_kampkort blijft leeg.
+     *   (Zie casus Rowan Buijl 24-jun-2026; geheugen: acl_cache_deadlock_registratie /
+     *   criteria_kampkort_fallback.)
+     *
+     * OPLOSSING (waarom hier, waarom zo):
+     *   We persisten het kampkort hier alvast, ruim vóór de abort-gevoelige secties, zodat het
+     *   een latere abort overleeft. Bewust via DIRECTE SQL i.p.v. base_api_wrapper():
+     *     - GEEN hooks -> geen extra participant-write-cascade, geen ACL-cache-reset, geen
+     *       re-entrancy in deze hook (de anti-recursie-guard zit in core_civicrm_post).
+     *     - Eén kleine single-row upsert op civicrm_value_part_118 -> verwaarloosbare lock,
+     *       raakt de ACL-cache niet, draagt dus niet bij aan de deadlock.
+     *   Dit is een vangnet (belt-and-suspenders) bovenop de kampkort-fallback in partstatus;
+     *   het is volledig IDEMPOTENT: CORE 8.2/99.x schrijft exact dezelfde waarde later nog eens.
+     *
+     * GUARD (gelijk aan CORE 8.2):
+     *   $extdjpart                       -> dit event levert participant-waarden (gezet in 0.X)
+     *   in_array($groupID, $profilepart) -> alleen op een PART-profiel (deel/leid), niet op contact-only
+     *   $ditevent_part_id > 0            -> er is een concrete deelnemer om op te schrijven
+     *   !empty($eventkamp_kampkort)      -> alleen schrijven als het event écht een kampkort heeft
+     *                                       (anders zouden we een geldige waarde met leeg overschrijven)
+     *
+     * VELD-IDS (hardcoded, conform OZK-conventie):
+     *   civicrm_value_part_118 = custom group PART; kolom part_kampkort_950 = custom field
+     *   PART.PART_kampkort (id 950). entity_id is de unieke sleutel -> ON DUPLICATE KEY UPDATE
+     *   maakt de rij aan als die nog niet bestaat, of werkt enkel het kampkort bij als die er al is.
+     */
     if ($extdjpart == 1 && in_array($groupID, $profilepart) && $ditevent_part_id > 0 && !empty($eventkamp_kampkort)) {
         try {
+            // %1/%2 zijn geparametriseerd (geen SQL-injectie); %2 wordt 2x gebruikt (VALUES + UPDATE).
             CRM_Core_DAO::executeQuery(
                 "INSERT INTO civicrm_value_part_118 (entity_id, part_kampkort_950) VALUES (%1, %2)
                  ON DUPLICATE KEY UPDATE part_kampkort_950 = %2",
@@ -1616,7 +1653,9 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
             );
             wachthond($extdebug, 1, "Vroege kampkort-persist OK", "[PID $ditevent_part_id = $eventkamp_kampkort]");
         } catch (\Throwable $e) {
-            // Niet fataal: CORE 8.2 schrijft het later opnieuw, en partstatus heeft een kampkort-fallback.
+            // Niet fataal: dit is enkel een vangnet. CORE 8.2/99.x schrijft het kampkort later nog
+            // een keer, en partstatus_criteria valt sowieso terug op het event-kampkort + markeert
+            // incomplete data. We loggen en gaan door, zodat dit vangnet de registratie nooit blokkeert.
             wachthond($extdebug, 1, "Vroege kampkort-persist faalde (genegeerd)", $e->getMessage());
         }
     }
