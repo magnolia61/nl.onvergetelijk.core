@@ -423,6 +423,7 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     $eventtypesdeeltop      = $eventtypes['deeltop'];
     $eventtypesleid         = $eventtypes['leid'];
     $eventtypesmeet         = $eventtypes['meet'];
+    $eventtypestoer         = $eventtypes['toer'];   // toerusting / trainingsdag (train + workshop)
     
     // 2. Map de test types
     $eventtypesdeeltest     = $eventtypes['deeltest'];
@@ -2188,15 +2189,22 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     wachthond($extdebug,4, 'eventypesdeeltop',      $eventtypesdeeltop);
     wachthond($extdebug,4, 'eventypesdeeltoptest',  $eventtypesdeeltoptest);
     wachthond($extdebug,4, 'eventypesleid',         $eventtypesleid);
-    wachthond($extdebug,4, 'eventypesleidtest',     $eventtypesleidtest); 
+    wachthond($extdebug,4, 'eventypesleidtest',     $eventtypesleidtest);
+    wachthond($extdebug,4, 'eventypestoer',         $eventtypestoer);
+    wachthond($extdebug,4, 'eventypesmeet',         $eventtypesmeet);
 
-    // We gebruiken nu numerieke ID's om mismatches met labels te voorkomen
-    $rol_deelnemer      = 7;
-    $rol_leiding        = 1;
-    $rol_hoofdleiding    = 2;
-    $rol_deelnemer_top  = 11;
-    $rol_leiding_top    = 15; // Controleer dit ID in je CiviCRM (meestal 15)
-    $rol_deelnemer_gave = 16;
+    // We gebruiken numerieke option-values (participant_role) om mismatches met labels te voorkomen.
+    // LET OP: dit zijn de option_value.value-waarden uit de groep 'participant_role',
+    // geverifieerd tegen de DB (25-jun-2026). De oude waarden (leiding=1/hoofdleiding=2/
+    // deelnemer_top=11/leiding_top=15) waren FOUT — die wezen naar Bezoeker/(niet-bestaand)/
+    // Cursist/Kampstaf en zorgden dat leiding als 'Bezoeker' werd weggeschreven.
+    $rol_deelnemer      = 7;   // Deelnemer
+    $rol_leiding        = 6;   // Leiding          (was fout: 1 = Bezoeker)
+    $rol_hoofdleiding   = 12;  // Hoofdleiding     (was fout: 2 = bestaat niet)
+    $rol_deelnemer_top  = 8;   // Deelnemer_Top    (was fout: 11 = Cursist)
+    $rol_leiding_top    = 9;   // Leiding Topkamp  (was fout: 15 = Kampstaf)
+    $rol_deelnemer_gave = 16;  // Deelnemer_Gave
+    $rol_kampstaf       = 15;  // Kampstaf (toer/meet)
 
     $ditevent_rol_ids = [];
 
@@ -2213,8 +2221,21 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
     }
 
     // --- 2. LEIDING ROLLEN ---
-    if (in_array($ditevent_event_type_id, $eventtypesleidall)) {
+    // Echte leiding-events (Leiding Zomerkampen) → Leiding.
+    // BEWUST 'leid' + 'leidtest' i.p.v. 'leid_all': leid_all bevat namelijk ook de
+    // kampstafmeetings ('meet'), en die krijgen hieronder hun eigen rol (Kampstaf).
+    if (in_array($ditevent_event_type_id, $eventtypesleid) ||
+        in_array($ditevent_event_type_id, $eventtypesleidtest)) {
         $ditevent_rol_ids[] = $rol_leiding;
+    }
+    // Toerusting / trainingsdag ('toer' = train + workshop) → Leiding.
+    // Dit zijn staf-events (leiding/kampstaf/bestuur); de afgesproken rol is Leiding (6).
+    if (in_array($ditevent_event_type_id, $eventtypestoer)) {
+        $ditevent_rol_ids[] = $rol_leiding;
+    }
+    // Kampstafmeetings ('meet') → Kampstaf.
+    if (in_array($ditevent_event_type_id, $eventtypesmeet)) {
+        $ditevent_rol_ids[] = $rol_kampstaf;
     }
     if (in_array($ditevent_part_functie, ['hoofdleiding'])) {
         $ditevent_rol_ids[] = $rol_hoofdleiding;
