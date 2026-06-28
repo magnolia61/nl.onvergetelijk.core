@@ -2854,8 +2854,15 @@ function core_civicrm_custom($op, $groupID, $entityID, &$params) {
         if ($ditevent_register_date)        { $params_part_ditevent['values']['PART.regdate']               = $ditevent_register_date;      }
         if ($ditevent_part_rol)             { $params_part_ditevent['values']['PART.PART_kamprol']          = $ditevent_part_rol;           }
         if ($ditevent_part_functie)         { $params_part_ditevent['values']['PART.PART_kampfunctie']      = $ditevent_part_functie;       }
-        $ditevent_rol_id = $ditevent_rol_id ?? NULL;
-        if ($ditevent_rol_id)               { $params_part_ditevent['values']['role_id:name']               = $ditevent_rol_id;             }
+
+        // De canonieke rollenset is in CORE 5.5 berekend ($ditevent_final_roles, incl. Hoofdleiding=12
+        // bij functie 'hoofdleiding'). CORE 8.0 her-initialiseert $params_part_ditevent (regel ~2369) en
+        // wist die role_id; daarom moeten we 'm hier opnieuw zetten, anders bereikt de rol nooit de DB.
+        // (De oude regel schreef $ditevent_rol_id weg, maar die variabele krijgt nergens een waarde → dode code.)
+        if (!empty($ditevent_final_roles)) {
+            $params_part_ditevent['values']['role_id'] = $ditevent_final_roles;
+            wachthond($extdebug, 3, 'role_id (herzet na CORE 8.0 re-init)', $ditevent_final_roles);
+        }
 
         if ($event_hoofdleiding1_displname) {
             $params_part_ditevent['values']['PART.PART_hoofd_1_dn'] = $event_hoofdleiding1_displname;

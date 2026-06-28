@@ -689,4 +689,104 @@ class CoreHooksTest extends \PHPUnit\Framework\TestCase implements EndToEndInter
         'PART_kamplocatie moet ook voor leiding gevuld zijn (regressie prefix-bug).');
     }
   }
+
+  // ########################################################################
+  // ### SCENARIO L: HOOFDLEIDING KRIJGT BEIDE ROLLEN (LEIDING + HOOFDLEIDING)
+  // ########################################################################
+
+  /**
+   * Een leiding met functie 'hoofdleiding' moet ná de post-hook ZOWEL de rol
+   * Leiding ALS Hoofdleiding hebben.
+   *
+   * Achtergrond / regressie (gefixt 28-jun-2026): CORE 5.5 berekent de juiste
+   * rollenset ($ditevent_final_roles, incl. Hoofdleiding bij functie 'hoofdleiding')
+   * en zet die in $params_part_ditevent['values']['role_id']. CORE 8.0 her-initialiseerde
+   * $params_part_ditevent daarna volledig (~r2369) → role_id wég, en de enige
+   * terug-schrijfregel gebruikte de nooit-gevulde $ditevent_rol_id → dode code.
+   * Netto kreeg een hoofdleider in de normale save alleen Leiding (6), nooit
+   * Hoofdleiding (12). De fix herschrijft $ditevent_final_roles na de re-init.
+   *
+   * VÓÓR de fix faalt deze test (alleen 'Leiding'); NÁ de fix bevat role_id beide.
+   * De bron van de functie is PART_LEID.Functie (zie base.helpers.entity.php r185-187),
+   * dus die zetten we op de registratie op het generieke leiding-event.
+   */
+  public function testPostHoofdleidingKrijgtLeidingEnHoofdleidingRol() {
+    if (!function_exists('core_civicrm_post') || !function_exists('get_event_types')) {
+      $this->markTestSkipped('Vereiste functies niet beschikbaar.');
+    }
+
+    // Zoek een actief leiding-event (event-type in de 'leid'-set → CORE 5.5 sectie 2
+    // voegt Leiding (6) toe; de functie 'hoofdleiding' voegt Hoofdleiding (12) + Leiding toe).
+    $eventtypes = get_event_types();
+    $leidTypes  = $eventtypes['leid'] ?? [];
+    if (empty($leidTypes)) {
+      $this->markTestSkipped('Geen leiding-eventtypes gevonden.');
+    }
+    $leidEvents = \civicrm_api4('Event', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [
+        ['event_type_id', 'IN', $leidTypes],
+        ['is_active',     '=',  TRUE],
+      ],
+      'select'           => ['id'],
+      'limit'            => 1,
+    ]);
+    if ($leidEvents->count() === 0) {
+      $this->markTestSkipped('Geen actief leiding-event gevonden.');
+    }
+    $leidEventId = $leidEvents->first()['id'];
+
+    // Resolve de verwachte rol-namen dynamisch (NOOIT numerieke IDs hardcoden — die
+    // bleken eerder fout, zie memory participant_role_correction_core55).
+    $rolNamen = \civicrm_api4('OptionValue', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [
+        ['option_group_id.name', '=',  'participant_role'],
+        ['value',                'IN', ['6', '12']],
+      ],
+      'select'           => ['value', 'name'],
+    ])->indexBy('value')->column('name');
+    $this->assertEquals('Leiding',      $rolNamen['6']  ?? NULL, 'Rol-value 6 hoort Leiding te zijn.');
+    $this->assertEquals('Hoofdleiding', $rolNamen['12'] ?? NULL, 'Rol-value 12 hoort Hoofdleiding te zijn.');
+
+    $contactId = $this->callAPISuccess('Contact', 'create', [
+      'contact_type' => 'Individual',
+      'first_name'   => 'CorePost',
+      'last_name'    => 'Hoofdleiding',
+      'birth_date'   => '1990-01-01',
+    ])['id'];
+
+    // Registreer als hoofdleiding: PART_LEID.Functie = 'hoofdleiding' is de bron
+    // die CORE 5.5 leest om de rol-correctie te sturen.
+    $participantId = \civicrm_api4('Participant', 'create', [
+      'checkPermissions' => FALSE,
+      'values'           => [
+        'contact_id'         => $contactId,
+        'event_id'           => $leidEventId,
+        'status_id:name'     => 'Registered',
+        'PART_LEID.Functie'  => 'hoofdleiding',
+      ],
+    ])->first()['id'];
+
+    // Simuleer de create-hook (deterministisch, net als de andere scenario's).
+    $objectRef = new \stdClass();
+    core_civicrm_post('create', 'Participant', $participantId, $objectRef);
+
+    // Lees de rollen terug. role_id:name is een array van rol-namen.
+    $part = \civicrm_api4('Participant', 'get', [
+      'checkPermissions' => FALSE,
+      'where'            => [['id', '=', $participantId]],
+      'select'           => ['role_id', 'role_id:name'],
+    ])->first();
+
+    $rollen = $part['role_id:name'] ?? [];
+    $this->assertIsArray($rollen, 'role_id:name moet een array van rol-namen zijn.');
+
+    // KERN-ASSERTIE (de fix): beide rollen aanwezig.
+    $this->assertContains('Leiding', $rollen,
+      'Hoofdleiding moet de rol Leiding behouden.');
+    $this->assertContains('Hoofdleiding', $rollen,
+      'Hoofdleiding moet OOK de rol Hoofdleiding krijgen. Ontbreekt deze, dan is de ' .
+      'CORE 8.0 re-init de berekende role_id weer aan het wissen (regressie 28-jun-2026).');
+  }
 }
